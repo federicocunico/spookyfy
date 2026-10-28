@@ -1,0 +1,14 @@
+# Installazione:
+#   sudo cp deploy/yt-dlp-update.service deploy/yt-dlp-update.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now yt-dlp-update.timer
+
+[Unit]
+Description=Aggiornamento settimanale di yt-dlp
+
+[Timer]
+OnCalendar=weekly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+data/
+media/
+*.log
+test-results/
+playwright-report/
+.svelte-kit/
+.playwright-mcp/

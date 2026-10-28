@@ -1,0 +1,12 @@
+# Aggiorna yt-dlp (le sorgenti cambiano spesso e le versioni vecchie smettono di funzionare).
+# Va usato insieme a yt-dlp-update.timer. Presuppone yt-dlp installato come
+# binario standalone in /usr/local/bin/yt-dlp (vedi README).
+
+[Unit]
+Description=Aggiornamento di yt-dlp per Spookyfy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/yt-dlp -U

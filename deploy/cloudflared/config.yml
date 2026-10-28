@@ -1,0 +1,19 @@
+# Esempio di configurazione di Cloudflare Tunnel per Spookyfy.
+# 1. cloudflared tunnel login
+# 2. cloudflared tunnel create spookyfy           (stampa l'UUID e crea il file di credenziali)
+# 3. cloudflared tunnel route dns spookyfy spookyfy.example.com
+# 4. Copia questo file in /etc/cloudflared/config.yml sostituendo UUID e dominio
+# 5. cloudflared tunnel ingress validate && sudo cloudflared service install
+
+tunnel: 00000000-0000-0000-0000-000000000000
+credentials-file: /etc/cloudflared/00000000-0000-0000-0000-000000000000.json
+
+ingress:
+  # Spookyfy ascolta solo su localhost: nessuna porta aperta sul router.
+  - hostname: spookyfy.example.com
+    service: http://127.0.0.1:8787
+    originRequest:
+      # Download e streaming possono durare a lungo.
+      connectTimeout: 30s
+      keepAliveTimeout: 90s
+  - service: http_status:404

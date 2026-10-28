@@ -1,0 +1,23 @@
+{
+  "name": "spookyfy",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:shared": "pnpm --filter @spookyfy/shared build",
+    "dev": "pnpm build:shared && pnpm --parallel --filter @spookyfy/server --filter @spookyfy/web dev",
+    "build": "pnpm build:shared && pnpm --filter @spookyfy/web build && pnpm --filter @spookyfy/server build",
+    "test": "pnpm build:shared && pnpm -r --filter=!@spookyfy/e2e test",
+    "test:e2e": "pnpm build && pnpm --filter @spookyfy/e2e test",
+    "typecheck": "pnpm build:shared && pnpm -r typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "typescript": "^5.7.3"
+  }
+}

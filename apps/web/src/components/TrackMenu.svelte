@@ -1,0 +1,184 @@
+<script lang="ts">
+import { services } from '../lib/services.svelte';
+import Cover from './Cover.svelte';
+import Icon, { type IconName } from './Icon.svelte';
+import Sheet from './Sheet.svelte';
+
+const { ui, player, library, downloads, toasts, connection } = services();
+const state = $derived(ui.menu);
+
+function close() {
+  ui.menu = null;
+}
+
+async function run(action: () => Promise<void> | void, failure: string) {
+  close();
+  try {
+    await action();
+  } catch {
+    toasts.error(failure);
+  }
+}
+
+interface Action {
+  id: string;
+  label: string;
+  icon: IconName;
+  run: () => void;
+  online?: boolean;
+  danger?: boolean;
+}
+
+const actions = $derived.by((): Action[] => {
+  const s = state;
+  if (!s) return [];
+  const { track, playlistId, itemId } = s;
+  const status = downloads.status(track.id);
+  const list: Action[] = [
+    {
+      id: 'favorite',
+      label: track.isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti',
+      icon: track.isFavorite ? 'heart' : 'heart-outline',
+      online: true,
+      run: () => run(() => library.setFavorite(track, !track.isFavorite), 'Preferiti non aggiornati'),
+    },
+    {
+      id: 'play-next',
+      label: 'Riproduci dopo',
+      icon: 'queue',
+      run: () => run(() => player.playNext(track), 'Impossibile aggiungere alla coda'),
+    },
+    {
+      id: 'add-to-playlist',
+      label: 'Aggiungi a playlist',
+      icon: 'plus',
+      online: true,
+      run: () => {
+        close();
+        ui.addToPlaylist = track;
+      },
+    },
+    {
+      id: 'download',
+      label: status === 'none' ? 'Scarica' : 'Rimuovi download',
+      icon: status === 'none' ? 'cloud' : 'check',
+      online: status === 'none',
+      run: () =>
+        run(
+          () => (status === 'none' ? downloads.download(track) : downloads.remove(track.id)),
+          'Operazione non riuscita',
+        ),
+    },
+  ];
+  if (playlistId && itemId) {
+    list.push({
+      id: 'remove-from-playlist',
+      label: 'Rimuovi da questa playlist',
+      icon: 'close',
+      online: true,
+      run: () =>
+        run(() => library.removeFromPlaylist(playlistId, itemId), 'Brano non rimosso dalla playlist'),
+    });
+  }
+  list.push(
+    {
+      id: 'edit',
+      label: 'Modifica informazioni',
+      icon: 'edit',
+      online: true,
+      run: () => {
+        close();
+        ui.editTrack = track;
+      },
+    },
+    {
+      id: 'delete',
+      label: 'Elimina dalla libreria',
+      icon: 'trash',
+      online: true,
+      danger: true,
+      run: () => {
+        close();
+        ui.confirm = {
+          title: 'Eliminare il brano?',
+          message: `«${track.title}» verrà eliminato dalla libreria per tutti gli account, insieme al file sul server.`,
+          confirmLabel: 'Elimina',
+          danger: true,
+          confirm: async () => {
+            try {
+              await library.deleteTrack(track.id);
+              toasts.show('Brano eliminato');
+            } catch {
+              toasts.error('Il brano non è stato eliminato');
+            }
+          },
+        };
+      },
+    },
+  );
+  return list;
+});
+</script>
+
+{#if state}
+  <Sheet label={`Azioni per ${state.track.title}`} onclose={close}>
+    <div class="head">
+      <Cover src={state.track.coverThumbUrl} color={state.track.dominantColor} size={48} />
+      <div class="names">
+        <strong class="ellipsis">{state.track.title}</strong>
+        <span class="muted ellipsis">{state.track.artist}</span>
+      </div>
+    </div>
+    <ul>
+      {#each actions as a (a.id)}
+        <li>
+          <button
+            class="action"
+            class:danger={a.danger}
+            data-action={a.id}
+            disabled={a.online && connection.offline}
+            onclick={a.run}
+          >
+            <Icon name={a.icon} />
+            <span>{a.label}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </Sheet>
+{/if}
+
+<style>
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .names {
+    min-width: 0;
+    display: grid;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: var(--space-2) 0 0;
+  }
+  .action {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+    min-height: 52px;
+    text-align: left;
+    color: var(--text);
+  }
+  .action :global(svg) {
+    color: var(--text-2);
+  }
+  .danger,
+  .danger :global(svg) {
+    color: var(--danger);
+  }
+</style>
