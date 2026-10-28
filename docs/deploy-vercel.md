@@ -57,7 +57,7 @@ curl https://<progetto>.vercel.app/api/health    # {"status":"ok","mode":"client
 
 Il job `deploy-vercel` di `.github/workflows/ci.yml` pubblica in produzione a ogni push su `main`, dopo lint, test ed e2e, poi controlla `/api/health`. Una tantum:
 
-1. Crea un token su **https://vercel.com/account/tokens** (scope: il team del progetto).
+1. Crea un token su **https://vercel.com/account/settings/tokens** → *Create Token*, con **Scope: il team del progetto** (es. «federicocunico94-1584's projects»), non limitato a un singolo progetto. Un token limitato al progetto riceve 403 sul team e la CLI fallisce con «Could not retrieve Project Settings»; il job lo segnala nel passo «Token Vercel con accesso al team».
 2. Salva token, ID e URL nel repository:
 
    ```bash

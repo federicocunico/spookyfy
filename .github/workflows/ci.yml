@@ -66,8 +66,14 @@ jobs:
           node-version-file: .nvmrc
       - run: corepack enable
       - run: npm install --global vercel@50.32.3
-      # Token valido e con accesso al team del progetto (altrimenti pull fallisce senza spiegazioni).
-      - run: vercel whoami --token="$VERCEL_TOKEN" && vercel project ls --token="$VERCEL_TOKEN" | grep -q spookyfy
+      # La CLI legge prima il team: un token limitato al progetto riceve 403 e pull fallisce senza spiegazioni.
+      - name: Token Vercel con accesso al team
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v2/teams/$VERCEL_ORG_ID")
+          if [ "$code" != 200 ]; then
+            echo "::error::Il token Vercel non può leggere il team (HTTP $code): crealo su vercel.com/account/settings/tokens con scope il team del progetto (vedi docs/deploy-vercel.md)"
+            exit 1
+          fi
       - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - run: vercel build --prod --token="$VERCEL_TOKEN"
       - id: deploy
