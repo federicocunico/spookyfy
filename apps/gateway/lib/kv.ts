@@ -38,10 +38,14 @@ export class UpstashKv implements Kv {
     return this.redis.mget(...keys) as Promise<{ [K in keyof T]: T[K] | null }>;
   }
   async set(key: string, value: unknown, opts: { nx?: boolean; exSeconds?: number } = {}) {
-    const ex = opts.exSeconds ? { ex: Math.max(1, Math.ceil(opts.exSeconds)) } : {};
-    const res = opts.nx
-      ? await this.redis.set(key, value, { nx: true, ...ex })
-      : await this.redis.set(key, value, { ...ex });
+    // Opzioni esplicite: i tipi di SetCommandOptions non accettano `ex: undefined`.
+    const ex = opts.exSeconds ? Math.max(1, Math.ceil(opts.exSeconds)) : 0;
+    let res: unknown;
+    if (opts.nx)
+      res = await (ex
+        ? this.redis.set(key, value, { nx: true, ex })
+        : this.redis.set(key, value, { nx: true }));
+    else res = await (ex ? this.redis.set(key, value, { ex }) : this.redis.set(key, value));
     return res === 'OK';
   }
   del(...keys: string[]) {
