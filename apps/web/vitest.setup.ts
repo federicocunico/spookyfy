@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
+import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
+
+// Blob e File di Node: compatibili con Response/fetch di Node (quelli di jsdom verrebbero
+// serializzati come la stringa "[object Blob]" dentro una Response).
+globalThis.Blob = NodeBlob as unknown as typeof Blob;
+globalThis.File = NodeFile as unknown as typeof File;
 
 // API del browser non implementate da jsdom.
 window.scrollTo = () => {};

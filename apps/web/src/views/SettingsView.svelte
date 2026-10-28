@@ -1,14 +1,19 @@
 <script lang="ts">
+import { untrack } from 'svelte';
+import DeviceSettings from '../components/DeviceSettings.svelte';
 import Icon from '../components/Icon.svelte';
+import TokensSection from '../components/TokensSection.svelte';
 import { formatBytes, pluralize } from '../lib/format';
 import { pathOf } from '../lib/router.svelte';
 import { services } from '../lib/services.svelte';
 
-const { session, storage, downloads, router, toasts } = services();
+const { session, storage, downloads, router, toasts, mode, health } = services();
 let busy = $state(false);
 
 $effect(() => {
-  void storage.refresh();
+  untrack(() => {
+    void storage.refresh();
+  });
 });
 
 async function logout() {
@@ -41,6 +46,9 @@ async function logout() {
     </button>
   </section>
 
+  {#if mode === 'client'}
+    <DeviceSettings />
+  {:else}
   <section class="card" aria-labelledby="storage-title">
     <h2 id="storage-title">Spazio sul dispositivo</h2>
     {#if storage.persisted === true}
@@ -67,6 +75,10 @@ async function logout() {
       {/if}
     </dl>
   </section>
+  {#if health?.features.includes('bridge-tokens')}
+    <TokensSection />
+  {/if}
+  {/if}
 
   <p class="muted small version">Spookyfy {import.meta.env.VITE_APP_VERSION ?? '0.1.0'}</p>
 </div>

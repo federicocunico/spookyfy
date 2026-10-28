@@ -72,6 +72,13 @@ export class Jobs {
     this.saveDeviceJobs();
   }
 
+  /** Registra un'importazione avviata da questo dispositivo fuori da `request` (es. tramite ponte). */
+  adopt(job: JobDto): void {
+    this.deviceJobs.add(job.id);
+    this.saveDeviceJobs();
+    this.upsert(job);
+  }
+
   /** Stato attuale dal server (all'avvio e dopo una riconnessione). */
   async reload(): Promise<void> {
     const { items } = await this.deps.api.remote.jobs();

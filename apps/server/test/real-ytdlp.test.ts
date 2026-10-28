@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { cleanMetadata } from '@spookyfy/shared';
 import { afterAll, expect, test } from 'vitest';
 import { processCover } from '../src/ingest/covers.js';
-import { cleanMetadata } from '../src/ingest/metadata.js';
 import { createYtDlp } from '../src/ingest/ytdlp.js';
 import { readTags, writeTags } from '../src/media/tags.js';
 import { makeTempDir } from './helpers.js';

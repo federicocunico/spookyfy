@@ -8,7 +8,21 @@ test('apertura su un database nuovo: tutti gli store e gli indici', async () => 
   const db = await openSpookyfyDb(uniqueName());
   expect(db.version).toBe(DB_VERSION);
   expect([...db.objectStoreNames].sort()).toEqual(
-    ['downloadQueue', 'downloads', 'meta', 'pendingPlays', 'playlists', 'tracks'].sort(),
+    [
+      'downloadQueue',
+      'downloads',
+      'meta',
+      'pendingPlays',
+      'playlists',
+      'tracks',
+      'libTracks',
+      'libFavorites',
+      'libPlaylists',
+      'libPlaylistItems',
+      'libPlays',
+      'imports',
+      'settings',
+    ].sort(),
   );
   expect([...db.transaction('downloadQueue').store.indexNames]).toEqual(['byEnqueued']);
   db.close();
@@ -24,25 +38,26 @@ test('riapertura: i dati restano', async () => {
   again.close();
 });
 
-test('migrazione: da v1 a una versione successiva i dati restano e la nuova migrazione viene applicata', async () => {
+test('migrazione: dall’ultima versione a una successiva i dati restano e la nuova migrazione viene applicata', async () => {
   const name = uniqueName();
-  const v1 = await openSpookyfyDb(name, 1);
+  const v1 = await openSpookyfyDb(name, DB_VERSION);
   await v1.put('downloads', { trackId: 't1', sizeBytes: 10, downloadedAt: 1 });
   v1.close();
 
   // Migrazione di prova registrata solo per questo test.
-  MIGRATIONS[2] = (db) => {
+  const next = DB_VERSION + 1;
+  MIGRATIONS[next] = (db) => {
     (db as unknown as IDBPDatabase).createObjectStore('futuro');
   };
   try {
-    const v2 = await openSpookyfyDb(name, 2);
-    expect(v2.version).toBe(2);
+    const v2 = await openSpookyfyDb(name, next);
+    expect(v2.version).toBe(next);
     expect(v2.objectStoreNames.contains('futuro' as never)).toBe(true);
     expect(await v2.get('downloads', 't1')).toMatchObject({ trackId: 't1' });
     v2.close();
   } finally {
     // biome-ignore lint/performance/noDelete: la chiave va rimossa, non solo azzerata
-    delete MIGRATIONS[2];
+    delete MIGRATIONS[next];
   }
 });
 
@@ -55,6 +70,56 @@ test('un database a una versione intermedia viene portato all’ultima', async (
   expect(db.version).toBe(DB_VERSION);
   expect(db.objectStoreNames.contains('pendingPlays')).toBe(true);
   db.close();
+});
+
+test('migrazione v1 → v2: i dati esistenti restano e compaiono gli store della libreria sul dispositivo', async () => {
+  const name = uniqueName();
+  const v1 = await openSpookyfyDb(name, 1);
+  await v1.put('downloads', { trackId: 't1', sizeBytes: 10, downloadedAt: 1 });
+  await v1.put('pendingPlays', { id: 'p1', trackId: 't1', playedAt: 5 });
+  v1.close();
+  const v2 = await openSpookyfyDb(name, 2);
+  expect(await v2.get('downloads', 't1')).toMatchObject({ sizeBytes: 10 });
+  expect(await v2.get('pendingPlays', 'p1')).toMatchObject({ playedAt: 5 });
+  for (const store of [
+    'libTracks',
+    'libFavorites',
+    'libPlaylists',
+    'libPlaylistItems',
+    'libPlays',
+    'imports',
+    'settings',
+  ]) {
+    expect(v2.objectStoreNames.contains(store as never)).toBe(true);
+  }
+  await v2.put('libTracks', {
+    id: 'a',
+    sourceKey: 'youtube:abcdefghijk',
+    title: 'A',
+    artist: 'X',
+    album: null,
+    durationMs: 1,
+    sizeBytes: 1,
+    mimeType: 'audio/mp4',
+    dominantColor: '#000000',
+    addedAt: 1,
+  });
+  // sourceKey unico: un secondo brano con la stessa sorgente viene rifiutato.
+  await expect(
+    v2.add('libTracks', {
+      id: 'b',
+      sourceKey: 'youtube:abcdefghijk',
+      title: 'B',
+      artist: 'X',
+      album: null,
+      durationMs: 1,
+      sizeBytes: 1,
+      mimeType: 'audio/mp4',
+      dominantColor: '#000000',
+      addedAt: 2,
+    }),
+  ).rejects.toThrow();
+  v2.close();
 });
 
 test('coda dei download ordinata per inserimento', async () => {

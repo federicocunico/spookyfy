@@ -1,4 +1,11 @@
+import type { BackendMode, HealthDto, WsServerEvent } from '@spookyfy/shared';
 import { type Api, api as defaultApi, setApiHooks } from './api';
+import { createDeviceBackend } from './device/backend';
+import { getSettings } from './device/backup';
+import { type CoverProcessor, processCover } from './device/cover';
+import { DeviceImporter } from './device/importer';
+import { DeviceLibrary } from './device/library';
+import { BridgeClient, GatewayClient } from './device/remote';
 import { type Db, getDb } from './offline/db';
 import { Downloads } from './offline/downloads.svelte';
 import { StorageStatus } from './offline/storage.svelte';
@@ -15,7 +22,28 @@ import { Session } from './stores/session.svelte';
 import { Toasts } from './stores/toasts.svelte';
 import { Ui } from './stores/ui.svelte';
 
+/** Servizi propri della modalità client (libreria e importazioni sul dispositivo). */
+export interface DeviceServices {
+  library: DeviceLibrary;
+  importer: DeviceImporter;
+  gateway: GatewayClient;
+  processCover: CoverProcessor;
+  /** Client del ponte on-premise, se configurato nelle impostazioni. */
+  bridge(): Promise<BridgeClient | null>;
+  /** Brani persi (file eliminati dal sistema), aggiornato dalla riconciliazione. */
+  lost: { ids: string[] };
+}
+
+/** Il realtime esiste solo in modalità on-premise; in modalità client è un segnaposto. */
+export interface Realtime {
+  start(): void;
+  stop(): void;
+  nudge(): void;
+}
+
 export interface Services {
+  mode: BackendMode;
+  health: HealthDto | null;
   api: Api;
   db: () => Promise<Db>;
   connection: Connection;
@@ -30,20 +58,31 @@ export interface Services {
   reporter: PlayReporter;
   player: Player;
   jobs: Jobs;
-  realtime: RealtimeClient;
+  realtime: Realtime;
+  device: DeviceServices | null;
+  /** Il brano è riproducibile senza rete (scaricato o, in modalità client, sul dispositivo). */
+  isLocal(trackId: string): boolean;
 }
 
 export interface ServiceOverrides {
+  mode?: BackendMode;
+  health?: HealthDto | null;
   api?: Api;
   db?: () => Promise<Db>;
   window?: Window;
   mediaSession?: MediaSessionBridge;
-  realtime?: (s: Pick<Services, 'jobs'>) => RealtimeClient;
+  realtime?: (s: Pick<Services, 'jobs'>) => Realtime;
+  /** Modalità client: fetch verso gateway, elaborazione copertine (finti nei test). */
+  fetch?: typeof fetch;
+  processCover?: CoverProcessor;
+  bridgePollMs?: number;
 }
+
+const noopRealtime: Realtime = { start() {}, stop() {}, nudge() {} };
 
 /** Crea e collega tutti gli store dell'app (anche nei test, con dipendenze finte). */
 export function createServices(o: ServiceOverrides = {}): Services {
-  const api = o.api ?? defaultApi;
+  const mode = o.mode ?? 'onpremise';
   const db = o.db ?? getDb;
   const win = o.window ?? window;
   const connection = new Connection(win);
@@ -51,13 +90,49 @@ export function createServices(o: ServiceOverrides = {}): Services {
   const ui = new Ui();
   const router = new Router(win);
   const storage = new StorageStatus();
-  const library = new Library(api, db);
   const wakeLock = new WakeLockController(win.navigator, win.document);
   const downloads = new Downloads({ db, toasts, wakeLock, doc: win.document });
+
+  // In modalità client gli eventi delle importazioni arrivano dal gestore locale.
+  let onImportEvent: (e: WsServerEvent) => void = () => {};
+  let device: DeviceServices | null = null;
+  let api: Api = o.api ?? defaultApi;
+  const lost = $state<{ ids: string[] }>({ ids: [] });
+  if (mode === 'client') {
+    const library = new DeviceLibrary({ db });
+    const gateway = new GatewayClient(o.fetch);
+    const cover = o.processCover ?? processCover;
+    const bridge = async () => {
+      const s = await getSettings(await db());
+      return s.bridge ? new BridgeClient(s.bridge, o.fetch) : null;
+    };
+    const importer = new DeviceImporter({
+      db,
+      library,
+      gateway,
+      bridge,
+      processCover: cover,
+      wakeLock,
+      storage: win.navigator?.storage,
+      doc: win.document,
+      bridgePollMs: o.bridgePollMs,
+      onEvent: (e) => onImportEvent(e),
+    });
+    device = { library, importer, gateway, processCover: cover, bridge, lost };
+    api = o.api ?? createDeviceBackend({ library, importer, gateway, auth: defaultApi.auth });
+  }
+  const dev = device;
+  const isLocal = (id: string) => (dev ? dev.library.isLocal(id) : downloads.isDownloaded(id));
+
+  const library = new Library(api, db);
   const reporter = new PlayReporter({ api, db });
   const player = new Player({
-    downloads,
-    connection,
+    // Modalità client: si suonano solo brani sul dispositivo, più quelli in importazione
+    // (`pending:<id>`) in streaming dal gateway quando c'è rete.
+    downloads: {
+      isDownloaded: (id) => (dev && id.startsWith('pending:') ? !connection.offline : isLocal(id)),
+    },
+    connection: dev ? { offline: true } : connection,
     toasts,
     reporter,
     mediaSession: o.mediaSession ?? new MediaSessionBridge(),
@@ -71,18 +146,24 @@ export function createServices(o: ServiceOverrides = {}): Services {
   const jobs = new Jobs({
     api,
     toasts,
-    onOwnTrackReady: (track) => void downloads.download(track, { silent: true }).catch(() => {}),
+    // Modalità client: il brano importato è già sul dispositivo.
+    onOwnTrackReady: dev
+      ? () => {}
+      : (track) => void downloads.download(track, { silent: true }).catch(() => {}),
     onTrackAdded: (track) => {
       if (library.recentlyAdded)
         library.recentlyAdded = [track, ...library.recentlyAdded.filter((t) => t.id !== track.id)];
+      player.replaceTrack(`pending:${track.sourceId}`, track);
     },
   });
-  const realtime =
-    o.realtime?.({ jobs }) ??
-    new RealtimeClient({
-      onEvent: (e) => jobs.handleEvent(e),
-      onReconnect: () => void jobs.reload().catch(() => {}),
-    });
+  onImportEvent = (e) => jobs.handleEvent(e);
+  const realtime: Realtime = dev
+    ? noopRealtime
+    : (o.realtime?.({ jobs }) ??
+      new RealtimeClient({
+        onEvent: (e) => jobs.handleEvent(e),
+        onReconnect: () => void jobs.reload().catch(() => {}),
+      }));
 
   setApiHooks({
     onUnauthenticated: () => session.expire(),
@@ -92,7 +173,7 @@ export function createServices(o: ServiceOverrides = {}): Services {
   library.onTrackChanged((t) => player.updateTrack(t));
   library.onTrackRemoved((id) => {
     player.removeTrack(id);
-    void downloads.remove(id).catch(() => {});
+    if (!dev) void downloads.remove(id).catch(() => {});
   });
   connection.onBackOnline(() => {
     void reporter.flush();
@@ -101,6 +182,8 @@ export function createServices(o: ServiceOverrides = {}): Services {
   });
 
   return {
+    mode,
+    health: o.health ?? null,
     api,
     db,
     connection,
@@ -116,6 +199,8 @@ export function createServices(o: ServiceOverrides = {}): Services {
     player,
     jobs,
     realtime,
+    device,
+    isLocal,
   };
 }
 
@@ -130,9 +215,34 @@ export function setServices(s: Services | null): void {
   current = s;
 }
 
-/** Avvio dopo l'autenticazione: download, coda, canale in tempo reale, ascolti in attesa. */
+/** Brani persi dal sistema: aggiorna l'elenco e avvisa l'utente. */
+export async function reconcileDevice(s: Services): Promise<string[]> {
+  if (!s.device) return [];
+  const newly = await s.device.library.reconcile().catch(() => []);
+  s.device.lost.ids = s.device.library.lostTracks().map((t) => t.id);
+  if (newly.length > 0) {
+    s.toasts.error(
+      `${newly.length === 1 ? 'Un brano è stato eliminato' : `${newly.length} brani sono stati eliminati`} dal sistema per liberare spazio. Puoi riscaricarli o ripristinare un backup.`,
+    );
+  }
+  return newly;
+}
+
+/** Avvio dopo l'autenticazione. */
 export async function startAuthenticated(s: Services): Promise<void> {
-  await s.downloads.init().catch(() => {});
+  if (s.device) {
+    await s.device.library.ready().catch(() => {});
+    await reconcileDevice(s);
+    s.device.library.onChange = () => {
+      if (s.device) s.device.lost.ids = s.device.library.lostTracks().map((t) => t.id);
+    };
+    s.device.importer.init().catch(() => {});
+    globalThis.document?.addEventListener('visibilitychange', () => {
+      if (!document.hidden) void reconcileDevice(s);
+    });
+  } else {
+    await s.downloads.init().catch(() => {});
+  }
   s.player.restore();
   void s.storage.requestPersistence();
   void s.reporter.flush();
@@ -142,5 +252,6 @@ export async function startAuthenticated(s: Services): Promise<void> {
 
 export function stopAuthenticated(s: Services): void {
   s.realtime.stop();
+  s.device?.importer.stop();
   s.player.stop();
 }

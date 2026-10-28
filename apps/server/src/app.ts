@@ -1,9 +1,13 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
+import { Feature, type HealthDto } from '@spookyfy/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import { registerBridgeCors } from './auth/bridge.js';
 import { registerAuth } from './auth/plugin.js';
 import { SessionService } from './auth/sessions.js';
+import { registerTokenRoutes } from './auth/token-routes.js';
+import { AccessTokenService } from './auth/tokens.js';
 import { UserService } from './auth/users.js';
 import { type Clock, systemClock } from './clock.js';
 import type { Config } from './config.js';
@@ -77,7 +81,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
 
   const users = new UserService(database.db, ctx.clock);
   const sessions = new SessionService(database.db, ctx.clock);
-  registerAuth(app, ctx, { users, sessions });
+  const tokens = new AccessTokenService(database.db, ctx.clock);
+  // CORS del ponte prima dell'autenticazione: gli header servono anche sugli errori.
+  registerBridgeCors(app, config.bridgeAllowedOrigins);
+  registerAuth(app, ctx, { users, sessions, tokens });
+  registerTokenRoutes(app, tokens);
 
   const library: LibraryServices = {
     tracks: new TrackService(database.sqlite, config.mediaDir),
@@ -110,7 +118,22 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   if (opts.startIngestWorker !== false) app.addHook('onReady', () => ingest.start());
   app.addHook('onClose', () => ingest.stop());
 
-  app.get('/api/health', { config: { public: true } }, async () => ({ status: 'ok' }));
+  app.get(
+    '/api/health',
+    { config: { public: true } },
+    async (): Promise<HealthDto> => ({
+      status: 'ok',
+      mode: 'onpremise',
+      version: config.version,
+      features: [
+        Feature.ServerLibrary,
+        Feature.RemoteSearch,
+        Feature.ServerIngest,
+        ...(config.registrationToken ? [Feature.Registration] : []),
+        ...(config.bridgeAllowedOrigins.length > 0 ? [Feature.BridgeTokens] : []),
+      ],
+    }),
+  );
 
   await registerWeb(app, config.webDistDir);
   return app;

@@ -21,11 +21,16 @@ let {
   leading?: Snippet;
 } = $props();
 
-const { player, downloads, connection, ui } = services();
+const { player, downloads, connection, ui, mode, device, isLocal } = services();
 const isCurrent = $derived(player.current?.id === track.id);
-const downloaded = $derived(downloads.isDownloaded(track.id));
-// Offline i brani non scaricati sono attenuati e non selezionabili.
-const unavailable = $derived(connection.offline && !downloaded);
+// Il segno "scaricato" ha senso solo in modalità on-premise (in client è tutto sul dispositivo).
+const downloaded = $derived(mode === 'onpremise' && downloads.isDownloaded(track.id));
+// On-premise offline: brani non scaricati attenuati. Client: brani persi (file eliminati dal sistema).
+const unavailable = $derived(
+  mode === 'client'
+    ? Boolean(device?.lost.ids.includes(track.id)) || !isLocal(track.id)
+    : connection.offline && !downloaded,
+);
 
 function openMenu(e: MouseEvent) {
   e.stopPropagation();

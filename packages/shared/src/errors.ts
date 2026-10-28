@@ -11,6 +11,11 @@ export const ErrorCode = {
   NotFound: 'NOT_FOUND',
   Conflict: 'CONFLICT',
   RemoteSearchUnavailable: 'REMOTE_SEARCH_UNAVAILABLE',
+  /** YouTube rifiuta le richieste del server (verifica anti-bot). */
+  YoutubeBlocked: 'YOUTUBE_BLOCKED',
+  VideoUnavailable: 'VIDEO_UNAVAILABLE',
+  VideoTooLong: 'VIDEO_TOO_LONG',
+  InsufficientStorage: 'INSUFFICIENT_STORAGE',
   Internal: 'INTERNAL',
 } as const;
 

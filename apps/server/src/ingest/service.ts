@@ -7,6 +7,7 @@ import {
   type JobStatus,
   type RemoteSearchResultDto,
 } from '@spookyfy/shared';
+import { cleanMetadata } from '@spookyfy/shared';
 import type Database from 'better-sqlite3';
 import type { FastifyBaseLogger } from 'fastify';
 import { ulid } from 'ulid';
@@ -17,7 +18,6 @@ import { COVER_SIZES, absMediaPath, audioRelPath, coverRelPath, coverRelPrefix }
 import { writeTags } from '../media/tags.js';
 import { processCover } from './covers.js';
 import type { IngestEvents } from './events.js';
-import { cleanMetadata } from './metadata.js';
 import { type YtDlp, YtDlpError } from './ytdlp.js';
 
 interface JobRow {

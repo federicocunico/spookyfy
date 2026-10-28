@@ -55,6 +55,21 @@ registerRoute(
   },
 );
 
+// Modalità client: libreria sul dispositivo sotto URL sintetici /local/*. Solo cache,
+// con risposte 206 per l'<audio>; 404 se il file è stato eliminato dal sistema.
+const DEVICE_AUDIO_CACHE = 'spk-device-audio-v1';
+const DEVICE_COVER_CACHE = 'spk-device-covers-v1';
+registerRoute(
+  ({ url, request }) => sameOrigin(url) && request.method === 'GET' && url.pathname.startsWith('/local/'),
+  async ({ request, url }) => {
+    const cacheName = url.pathname.startsWith('/local/audio/') ? DEVICE_AUDIO_CACHE : DEVICE_COVER_CACHE;
+    const cached = await (await caches.open(cacheName)).match(request.url);
+    if (!cached) return new Response(null, { status: 404 });
+    if (request.headers.has('range')) return createPartialResponse(request, cached);
+    return cached;
+  },
+);
+
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') void self.skipWaiting();
 });

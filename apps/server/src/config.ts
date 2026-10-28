@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 
@@ -34,6 +35,24 @@ const envSchema = z
     TRUST_CF_HEADERS: booleanString.default('true'),
     COOKIE_SECURE: booleanString.default('true'),
     REGISTRATION_TOKEN: z.string().max(256).default(DEFAULT_REGISTRATION_TOKEN),
+    /** Origini (separate da virgola) delle app in modalità client autorizzate a usare il ponte. */
+    BRIDGE_ALLOWED_ORIGINS: z
+      .string()
+      .default('')
+      .transform((v) =>
+        v
+          .split(',')
+          .map((o) => o.trim())
+          .filter(Boolean),
+      )
+      .pipe(
+        z.array(
+          z
+            .string()
+            .url()
+            .transform((o) => new URL(o).origin),
+        ),
+      ),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && !env.PUBLIC_ORIGIN) {
@@ -64,6 +83,9 @@ export interface Config {
   cookieSecure: boolean;
   /** Stringa vuota = registrazione disabilitata. */
   registrationToken: string;
+  /** Vuoto = ponte disabilitato. */
+  bridgeAllowedOrigins: string[];
+  version: string;
 }
 
 export class ConfigError extends Error {
@@ -74,6 +96,16 @@ export class ConfigError extends Error {
 }
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
+
+function packageVersion(): string {
+  try {
+    return (
+      JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as { version: string }
+    ).version;
+  } catch {
+    return '0.0.0';
+  }
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): Config {
   // Le variabili vuote nel file .env valgono come "non impostate", tranne il token
@@ -103,5 +135,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     trustCfHeaders: e.TRUST_CF_HEADERS,
     cookieSecure: e.COOKIE_SECURE,
     registrationToken: e.REGISTRATION_TOKEN,
+    bridgeAllowedOrigins: e.BRIDGE_ALLOWED_ORIGINS,
+    version: packageVersion(),
   };
 }

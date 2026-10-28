@@ -15,6 +15,13 @@
       "when": 1793179218479,
       "tag": "0001_tracks_fts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793190331105,
+      "tag": "0002_access_tokens",
+      "breakpoints": true
     }
   ]
 }

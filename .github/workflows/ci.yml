@@ -17,6 +17,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # Limite del piano Hobby di Vercel: al massimo 12 funzioni serverless nel gateway.
+      - run: pnpm --filter @spookyfy/gateway count-functions
       - run: pnpm build
 
   e2e:

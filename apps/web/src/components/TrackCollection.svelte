@@ -37,11 +37,17 @@ let {
   emptyText?: string;
 } = $props();
 
-const { player, downloads, connection, router } = services();
+const { player, downloads, connection, router, mode, isLocal } = services();
 const tracks = $derived(items?.map((i) => i.track) ?? []);
 const totalMs = $derived(tracks.reduce((s, t) => s + t.durationMs, 0));
 const allDownloaded = $derived(tracks.length > 0 && tracks.every((t) => downloads.isDownloaded(t.id)));
-const playable = $derived(connection.offline ? tracks.filter((t) => downloads.isDownloaded(t.id)) : tracks);
+const playable = $derived(
+  mode === 'client'
+    ? tracks.filter((t) => isLocal(t.id))
+    : connection.offline
+      ? tracks.filter((t) => downloads.isDownloaded(t.id))
+      : tracks,
+);
 
 function play(index: number) {
   player.playTracks(tracks, index, context);
@@ -104,7 +110,7 @@ function handleKey(e: KeyboardEvent, itemId: string, index: number) {
     </p>
     <div class="bar">
       <div class="left">
-        {#if tracks.length > 0}
+        {#if tracks.length > 0 && mode === 'onpremise'}
           <button
             class="icon-btn"
             class:on={allDownloaded}

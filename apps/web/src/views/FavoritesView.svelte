@@ -1,11 +1,14 @@
 <script lang="ts">
+import { untrack } from 'svelte';
 import Icon from '../components/Icon.svelte';
 import TrackCollection from '../components/TrackCollection.svelte';
 import { services } from '../lib/services.svelte';
 
 const { library } = services();
 $effect(() => {
-  void library.loadFavorites().catch(() => {});
+  untrack(() => {
+    void library.loadFavorites().catch(() => {});
+  });
 });
 const items = $derived(library.favorites?.map((f) => ({ key: f.track.id, track: f.track })) ?? null);
 </script>

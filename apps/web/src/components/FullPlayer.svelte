@@ -6,7 +6,7 @@ import Icon from './Icon.svelte';
 import Marquee from './Marquee.svelte';
 import ScrubBar from './ScrubBar.svelte';
 
-const { player, router, library, toasts, ui } = services();
+const { player, router, library, toasts, ui, mode } = services();
 const open = $derived(router.overlay === 'player' && player.current !== null);
 const track = $derived(player.current);
 
@@ -126,7 +126,11 @@ async function toggleFavorite() {
     </div>
 
     <div class="extras">
-      <DownloadToggle {track} size={26} />
+      {#if mode === 'onpremise'}
+        <DownloadToggle {track} size={26} />
+      {:else}
+        <span></span>
+      {/if}
       <button class="icon-btn" aria-label="Coda di riproduzione" onclick={() => (ui.queueOpen = true)}>
         <Icon name="queue" />
       </button>

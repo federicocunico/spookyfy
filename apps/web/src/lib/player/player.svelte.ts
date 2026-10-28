@@ -217,6 +217,20 @@ export class Player {
     this.persist(true);
   }
 
+  /**
+   * Sostituisce un brano provvisorio (in importazione, riprodotto in streaming)
+   * con quello definitivo sul dispositivo. Se è in riproduzione non si interrompe:
+   * l'audio continua dalla sorgente attuale, le riproduzioni successive usano la copia locale.
+   */
+  replaceTrack(oldId: string, track: TrackDto): void {
+    if (!this.queue || !this.tracks[oldId]) return;
+    const { [oldId]: _old, ...rest } = this.tracks;
+    this.tracks = { ...rest, [track.id]: track };
+    this.queue = { ...this.queue, items: this.queue.items.map((id) => (id === oldId ? track.id : id)) };
+    if (this.current?.id === track.id) this.deps.mediaSession.setTrack(track);
+    this.persist(true);
+  }
+
   /** Metadati aggiornati (preferito, titolo corretto…). */
   updateTrack(track: TrackDto): void {
     if (!this.tracks[track.id]) return;

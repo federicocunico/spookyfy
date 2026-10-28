@@ -1,4 +1,14 @@
-import type { YtInfo } from './ytdlp.js';
+/** Campi rilevanti dei metadati di un video (yt-dlp o youtubei.js). */
+export interface SourceInfo {
+  id: string;
+  title?: string;
+  uploader?: string;
+  channel?: string;
+  track?: string;
+  artist?: string;
+  artists?: string[];
+  album?: string;
+}
 
 export interface CleanMetadata {
   title: string;
@@ -50,7 +60,7 @@ export function cleanChannel(channel: string): string {
  * `artist`) se presenti, altrimenti titolo e canale ripuliti, con la forma
  * comune "Artista - Titolo" separata nei due campi.
  */
-export function cleanMetadata(info: YtInfo): CleanMetadata {
+export function cleanMetadata(info: SourceInfo): CleanMetadata {
   const album = info.album?.trim() || null;
   const artistField = info.artist?.trim() || info.artists?.filter(Boolean).join(', ');
   if (info.track?.trim() && artistField) {

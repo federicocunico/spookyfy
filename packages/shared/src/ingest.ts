@@ -38,6 +38,8 @@ export interface JobDto {
   /** Avanzamento da 0 a 1. */
   progress: number;
   error: string | null;
+  /** Codice d'errore (es. YOUTUBE_BLOCKED) per proporre alternative nell'app. */
+  errorCode?: string | null;
   trackId: string | null;
   /** Id dell'utente che ha richiesto l'importazione. */
   requestedBy: string | null;

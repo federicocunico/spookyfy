@@ -1,7 +1,9 @@
 <script lang="ts">
 import type { TrackDto } from '@spookyfy/shared';
+import { untrack } from 'svelte';
 import Cover from '../components/Cover.svelte';
 import Icon from '../components/Icon.svelte';
+import ImportFilesButton from '../components/ImportFilesButton.svelte';
 import PlaylistCover from '../components/PlaylistCover.svelte';
 import Skeleton from '../components/Skeleton.svelte';
 import TrackRow from '../components/TrackRow.svelte';
@@ -9,10 +11,12 @@ import { greeting } from '../lib/format';
 import { pathOf } from '../lib/router.svelte';
 import { services } from '../lib/services.svelte';
 
-const { library, player, router, downloads, connection } = services();
+const { library, player, router, connection, mode, isLocal } = services();
 
 $effect(() => {
-  void library.loadHome().catch(() => {});
+  untrack(() => {
+    void library.loadHome().catch(() => {});
+  });
 });
 
 function playFrom(list: TrackDto[], index: number, context: string) {
@@ -39,7 +43,7 @@ function playFrom(list: TrackDto[], index: number, context: string) {
         {#each library.recent as t, i (t.id)}
           <button
             class="card"
-            disabled={connection.offline && !downloads.isDownloaded(t.id)}
+            disabled={mode === 'client' ? !isLocal(t.id) : connection.offline && !isLocal(t.id)}
             onclick={() => playFrom(library.recent ?? [], i, 'recent')}
             aria-label={`Riproduci ${t.title} di ${t.artist}`}
           >
@@ -81,6 +85,7 @@ function playFrom(list: TrackDto[], index: number, context: string) {
       <div class="empty-state">
         <p>La libreria è vuota.</p>
         <button class="btn btn-primary" onclick={() => router.navigate(pathOf.search())}>Cerca un brano</button>
+        {#if mode === 'client'}<ImportFilesButton />{/if}
       </div>
     {:else}
       {#each library.recentlyAdded as t, i (t.id)}

@@ -1,6 +1,9 @@
 <script lang="ts">
 import type { TrackDto } from '@spookyfy/shared';
+import { untrack } from 'svelte';
+import DeviceNotices from '../components/DeviceNotices.svelte';
 import Icon from '../components/Icon.svelte';
+import ImportFilesButton from '../components/ImportFilesButton.svelte';
 import PlaylistCover from '../components/PlaylistCover.svelte';
 import Skeleton from '../components/Skeleton.svelte';
 import TrackRow from '../components/TrackRow.svelte';
@@ -8,17 +11,23 @@ import { formatLongDuration, pluralize } from '../lib/format';
 import { pathOf } from '../lib/router.svelte';
 import { services } from '../lib/services.svelte';
 
-const { library, router, ui, toasts, api, player, downloads, connection } = services();
+const { library, router, ui, toasts, api, player, downloads, connection, mode } = services();
+// In modalità client la libreria è sul dispositivo: nuove playlist anche offline.
+const needsNetwork = mode === 'onpremise';
 
 let all = $state<TrackDto[] | null>(null);
 let cursor = $state<string | null>(null);
 let loadingMore = $state(false);
 let sentinel: HTMLElement | undefined = $state();
 
+// Caricamento iniziale una sola volta: untrack evita che lo stato letto dentro i
+// caricamenti (cursore, loadingMore) riattivi l'effetto in un ciclo infinito.
 $effect(() => {
-  void library.loadPlaylists().catch(() => {});
-  void library.loadFavorites().catch(() => {});
-  void loadMore(true);
+  untrack(() => {
+    void library.loadPlaylists().catch(() => {});
+    void library.loadFavorites().catch(() => {});
+    void loadMore(true);
+  });
 });
 
 async function loadMore(reset = false) {
@@ -73,7 +82,13 @@ function go(e: MouseEvent, path: string) {
   <header class="top">
     <h1 class="page-title">La tua Libreria</h1>
     <div class="actions">
-      <button class="icon-btn" aria-label="Nuova playlist" onclick={newPlaylist} disabled={connection.offline}>
+      {#if mode === 'client'}<ImportFilesButton variant="icon" />{/if}
+      <button
+        class="icon-btn"
+        aria-label="Nuova playlist"
+        onclick={newPlaylist}
+        disabled={needsNetwork && connection.offline}
+      >
         <Icon name="plus" />
       </button>
       <button class="icon-btn" aria-label="Impostazioni" onclick={() => router.navigate(pathOf.settings())}>
@@ -82,12 +97,16 @@ function go(e: MouseEvent, path: string) {
     </div>
   </header>
 
-  <nav class="chips" aria-label="Filtri">
-    <a class="chip" aria-current="page" href={pathOf.library()} onclick={(e) => go(e, pathOf.library())}>Playlist</a>
-    <a class="chip" href={pathOf.downloaded()} onclick={(e) => go(e, pathOf.downloaded())}>
-      Scaricati{downloads.downloadedCount > 0 ? ` · ${downloads.downloadedCount}` : ''}
-    </a>
-  </nav>
+  {#if mode === 'client'}
+    <DeviceNotices />
+  {:else}
+    <nav class="chips" aria-label="Filtri">
+      <a class="chip" aria-current="page" href={pathOf.library()} onclick={(e) => go(e, pathOf.library())}>Playlist</a>
+      <a class="chip" href={pathOf.downloaded()} onclick={(e) => go(e, pathOf.downloaded())}>
+        Scaricati{downloads.downloadedCount > 0 ? ` · ${downloads.downloadedCount}` : ''}
+      </a>
+    </nav>
+  {/if}
 
   <ul class="list">
     <li>

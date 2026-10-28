@@ -7,7 +7,7 @@
 - [x] 1.3 Creare `apps/server` (Fastify + TypeScript, `tsx` in sviluppo) con rotta `GET /api/health` e verificare che `pnpm --filter server dev` risponda `200` su `/api/health`
 - [x] 1.4 Creare `apps/web` (Vite + Svelte 5 + TypeScript) con proxy di sviluppo `/api` → server (incluso WebSocket) e verificare che `pnpm --filter web dev` mostri la pagina iniziale
 - [x] 1.5 Configurare Biome, Vitest (server e web) e `tsconfig` base condiviso, e verificare che `pnpm lint` e `pnpm test` passino sul codice di esempio
-- [ ] 1.6 Aggiungere un workflow CI (GitHub Actions: install, lint, typecheck, test, build) e verificare che giri verde su un push di prova
+- [x] 1.6 Aggiungere un workflow CI (GitHub Actions: install, lint, typecheck, test, build) e verificare che giri verde su un push di prova
 
 ## 2. Fondamenta del server
 
@@ -110,7 +110,7 @@
 
 ## 12. Verifiche di integrazione
 
-- [ ] 12.1 Scrivere un test e2e Playwright del percorso completo (registrazione con token → logout → login → ricerca remota con yt-dlp finto → importazione → riproduzione in streaming → download → riproduzione offline) e verificare che passi su WebKit e Chromium in CI
+- [x] 12.1 Scrivere un test e2e Playwright del percorso completo (registrazione con token → logout → login → ricerca remota con yt-dlp finto → importazione → riproduzione in streaming → download → riproduzione offline) e verificare che passi su WebKit e Chromium in CI
 - [ ] 12.2 Eseguire la checklist manuale su iPhone reale (PWA installata via tunnel): installazione standalone, primo play da tap, lockscreen con copertina e controlli, avanzamento al brano successivo a schermo bloccato, cambio vista senza interruzioni, download di playlist con schermo acceso, modalità aereo, fallback dopo eliminazione della cache; registrare l'esito in `docs/verification-ios.md`
 - [ ] 12.3 Eseguire la stessa checklist su Android (Chrome) e registrare l'esito in `docs/verification-android.md`
 - [x] 12.4 Eseguire `openspec validate add-spookyfy-mvp --strict` e verificare che non ci siano errori

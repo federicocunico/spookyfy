@@ -122,3 +122,18 @@ export const plays = sqliteTable(
     index('plays_user_track_idx').on(t.userId, t.trackId),
   ],
 );
+
+export const accessTokens = sqliteTable(
+  'access_tokens',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: integer('created_at').notNull(),
+    lastUsedAt: integer('last_used_at'),
+  },
+  (t) => [index('access_tokens_user_idx').on(t.userId)],
+);

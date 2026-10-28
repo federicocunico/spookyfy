@@ -1,4 +1,6 @@
 import readline from 'node:readline';
+import { tokenNameSchema } from '../auth/token-routes.js';
+import { AccessTokenService } from '../auth/tokens.js';
 import { UserService } from '../auth/users.js';
 import { systemClock } from '../clock.js';
 import type { Db } from '../db/client.js';
@@ -21,6 +23,9 @@ Comandi:
   user:passwd <username>   reimposta la password e chiude le sessioni aperte
   user:list                elenca gli account
   user:delete <username>   elimina l'account con preferiti, playlist e storico
+  token:create <username> <nome>   crea un token di accesso per il ponte (mostrato una volta)
+  token:list <username>            elenca i token dell'utente
+  token:revoke <id>                revoca un token
 
 La password non si passa mai come argomento: viene letta dal terminale o da stdin.`;
 
@@ -47,9 +52,15 @@ function reportError(io: CliIo, err: unknown): number {
 }
 
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
-  const [command, username] = argv;
+  const [command, username, ...rest] = argv;
   const users = new UserService(io.db, systemClock);
-  const needsUsername = command === 'user:create' || command === 'user:passwd' || command === 'user:delete';
+  const tokens = new AccessTokenService(io.db, systemClock);
+  const needsUsername =
+    command === 'user:create' ||
+    command === 'user:passwd' ||
+    command === 'user:delete' ||
+    command === 'token:create' ||
+    command === 'token:list';
   if (!command || command === 'help' || command === '--help') {
     io.out(USAGE);
     return command ? 0 : 1;
@@ -85,6 +96,49 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       case 'user:delete': {
         users.delete(username!);
         io.out(`Account ${username} eliminato.`);
+        return 0;
+      }
+      case 'token:create': {
+        const parsed = tokenNameSchema.safeParse(rest.join(' '));
+        if (!parsed.success) {
+          io.err(`Errore: ${parsed.error.issues[0]?.message ?? 'nome non valido'}`);
+          return 1;
+        }
+        const user = users.findByUsername(username!);
+        if (!user) {
+          io.err(`Errore: utente ${username} non trovato`);
+          return 1;
+        }
+        const { token, record } = tokens.create(user.id, parsed.data);
+        io.out(`Token «${record.name}» creato (id ${record.id}). Copialo ora, non verrà più mostrato:`);
+        io.out(token);
+        return 0;
+      }
+      case 'token:list': {
+        const user = users.findByUsername(username!);
+        if (!user) {
+          io.err(`Errore: utente ${username} non trovato`);
+          return 1;
+        }
+        const list = tokens.list(user.id);
+        if (list.length === 0) io.out('Nessun token.');
+        for (const t of list) {
+          const used = t.lastUsedAt ? new Date(t.lastUsedAt).toISOString().slice(0, 10) : 'mai';
+          io.out(
+            `${t.id}	${t.name}	creato il ${new Date(t.createdAt).toISOString().slice(0, 10)}	ultimo uso: ${used}`,
+          );
+        }
+        return 0;
+      }
+      case 'token:revoke': {
+        if (!username) {
+          io.err(`Manca l'id del token.
+
+${USAGE}`);
+          return 1;
+        }
+        tokens.revoke(username);
+        io.out(`Token ${username} revocato.`);
         return 0;
       }
       default:

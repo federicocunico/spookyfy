@@ -28,6 +28,22 @@ Esito: ✅ ok · ❌ non ok (descrivere) · ⏭️ non verificato
 | 13 | Fallback dopo eliminazione della cache | Impostazioni iPhone → Safari → Avanzate → Dati dei siti web → eliminare i dati del dominio (oppure riempire lo spazio); riaprire online: i brani risultano non scaricati e partono in streaming senza errori | | |
 | 14 | Aggiornamento | Dopo un nuovo deploy compare "Nuova versione disponibile" e la musica non si interrompe | | |
 
+## Modalità client (gateway su Vercel)
+
+Stesso formato di esito, con l'app aperta dall'URL del progetto Vercel e installata nella schermata Home.
+
+| # | Verifica | Come | Esito | Note |
+|---|---|---|---|---|
+| C1 | Modalità rilevata | La Libreria mostra «Importa da file» e non il filtro «Scaricati» | | |
+| C2 | Importazione da YouTube | Cerca → Aggiungi: avanzamento, poi brano in libreria; se YouTube blocca, messaggio con le alternative | | |
+| C3 | Ascolto durante l'importazione | Play sul risultato mentre si importa: l'audio parte subito e non si interrompe al termine | | |
+| C4 | Importazione da file | Libreria → Importa da file → scegliere MP3/M4A da File/iCloud: titolo, artista e copertina dai tag | | |
+| C5 | Ponte on-premise | Impostazioni → Server di casa: «Ponte attivo»; ricerca e importazione tramite il server di casa | | |
+| C6 | Modalità aereo | Avvio senza rete, libreria completa riproducibile con seek, lockscreen funzionante | | |
+| C7 | Backup e ripristino | Esporta con audio → Salva su File; su un altro dispositivo o dopo aver cancellato i dati, Importa backup | | |
+| C8 | Eliminazione dello storage | Cancellare i dati del sito: all'apertura avviso dei brani persi, «Riscarica» dal menu ⋯ e ripristino da backup | | |
+| C9 | Spazio | Impostazioni: brani, spazio occupato e disponibile; avviso se lo storage non è protetto | | |
+
 ## Problemi riscontrati
 
 _Nessuno ancora._

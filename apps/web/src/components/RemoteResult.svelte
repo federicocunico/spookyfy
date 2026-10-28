@@ -1,22 +1,37 @@
 <script lang="ts">
-import type { RemoteSearchResultDto } from '@spookyfy/shared';
+import { ErrorCode, type RemoteSearchResultDto, type TrackDto } from '@spookyfy/shared';
 import { ApiError } from '../lib/api';
 import { formatDurationMs } from '../lib/format';
 import { services } from '../lib/services.svelte';
 import Icon from './Icon.svelte';
+import ImportFilesButton from './ImportFilesButton.svelte';
 
-let { result }: { result: RemoteSearchResultDto } = $props();
-const { jobs, player, toasts, connection, api } = services();
+let {
+  result,
+  via = 'gateway',
+  bridgeAvailable = false,
+}: {
+  result: RemoteSearchResultDto;
+  /** Da dove viene il risultato: ricerca normale o tramite il server di casa. */
+  via?: 'gateway' | 'bridge';
+  bridgeAvailable?: boolean;
+} = $props();
+const { jobs, player, toasts, connection, api, mode, device } = services();
 
 const job = $derived(jobs.jobFor(result.sourceId));
 const readyTrack = $derived(jobs.completedTracks[result.sourceId] ?? null);
 const inLibrary = $derived(result.trackId !== null || readyTrack !== null || job?.status === 'completed');
+const blocked = $derived(job?.status === 'failed' && job.errorCode === ErrorCode.YoutubeBlocked);
 let busy = $state(false);
 
 async function add() {
   busy = true;
   try {
-    await jobs.request(result);
+    if (via === 'bridge' && device) {
+      jobs.adopt(await device.importer.enqueue('bridge', result.sourceId));
+    } else {
+      await jobs.request(result);
+    }
   } catch (err) {
     toasts.error(err instanceof ApiError ? err.message : 'Importazione non riuscita');
   } finally {
@@ -24,13 +39,44 @@ async function add() {
   }
 }
 
+async function viaBridge() {
+  if (!device) return;
+  jobs.adopt(await device.importer.enqueue('bridge', result.sourceId));
+}
+
 async function play() {
-  // Streaming immediato: il brano è sul server (il salvataggio offline procede in parallelo).
   const id = readyTrack?.id ?? result.trackId ?? job?.trackId;
   if (!id) return;
   const track = readyTrack ?? (await api.tracks.get(id).catch(() => null));
   if (track) player.playTracks([track], 0, 'search');
 }
+
+/** Modalità client: ascolto immediato in streaming dal gateway mentre il brano si salva sul dispositivo. */
+function playWhileImporting() {
+  if (!device) return;
+  const pending: TrackDto = {
+    id: `pending:${result.sourceId}`,
+    sourceId: result.sourceId,
+    title: result.title,
+    artist: result.artist,
+    album: null,
+    durationMs: result.durationMs ?? 0,
+    sizeBytes: 0,
+    dominantColor: '#3a3a3a',
+    addedAt: Date.now(),
+    audioUrl: device.gateway.audioUrl(result.sourceId),
+    coverUrl: device.gateway.coverUrl(result.sourceId),
+    coverThumbUrl: device.gateway.coverUrl(result.sourceId),
+    isFavorite: false,
+    playCount: 0,
+    lastPlayedAt: null,
+  };
+  player.playTracks([pending], 0, 'search');
+}
+
+const canStreamWhileImporting = $derived(
+  mode === 'client' && via === 'gateway' && (job?.status === 'running' || job?.status === 'queued'),
+);
 </script>
 
 <div class="result" data-testid="remote-result" data-source-id={result.sourceId}>
@@ -56,18 +102,47 @@ async function play() {
         <Icon name="play" />
       </button>
     {:else if job?.status === 'failed'}
-      <button class="pill" onclick={() => void jobs.retry(job).catch(() => toasts.error('Riprova non riuscita'))} disabled={connection.offline}>
+      <button
+        class="pill"
+        onclick={() => void jobs.retry(job).catch(() => toasts.error('Riprova non riuscita'))}
+        disabled={connection.offline}
+      >
         Riprova
       </button>
+    {:else if canStreamWhileImporting}
+      <button class="icon-btn accent" aria-label={`Ascolta ${result.title} mentre si importa`} onclick={playWhileImporting}>
+        <Icon name="play" />
+      </button>
     {:else if job?.status === 'queued' || job?.status === 'running'}
-      <span class="spinner" role="progressbar" aria-label="Importazione in corso" aria-valuenow={Math.round((job.progress ?? 0) * 100)}></span>
+      <span
+        class="spinner"
+        role="progressbar"
+        aria-label="Importazione in corso"
+        aria-valuenow={Math.round((job.progress ?? 0) * 100)}
+      ></span>
     {:else}
-      <button class="pill" onclick={add} disabled={busy || connection.offline} aria-label={`Aggiungi ${result.title} alla libreria`}>
+      <button
+        class="pill"
+        onclick={add}
+        disabled={busy || connection.offline}
+        aria-label={`Aggiungi ${result.title} alla libreria`}
+      >
         <Icon name="plus" size={18} /> Aggiungi
       </button>
     {/if}
   </div>
 </div>
+{#if blocked}
+  <div class="alternatives" data-testid="blocked-alternatives">
+    <p class="muted">YouTube blocca il gateway: puoi aggiungere il brano in un altro modo.</p>
+    <div class="alt-actions">
+      <ImportFilesButton />
+      {#if bridgeAvailable}
+        <button class="btn btn-secondary" onclick={viaBridge}>Importa tramite il server di casa</button>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   .result {
@@ -132,6 +207,17 @@ async function play() {
     border: 3px solid var(--surface-hover);
     border-top-color: var(--accent);
     animation: spin 0.9s linear infinite;
+  }
+  .alternatives {
+    display: grid;
+    gap: var(--space-2);
+    padding: 0 0 var(--space-3) calc(64px + var(--space-3));
+    font-size: var(--fs-s);
+  }
+  .alt-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
   @keyframes spin {
     to {

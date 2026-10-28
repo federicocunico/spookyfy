@@ -28,6 +28,62 @@ export interface MetaValues {
   persisted: boolean;
 }
 
+/** Brano della libreria sul dispositivo (modalità client). */
+export interface LocalTrackRecord {
+  id: string;
+  /** `youtube:<id>` o `file:<hash>`: deduplicazione fra importazioni e dispositivi. */
+  sourceKey: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  durationMs: number;
+  sizeBytes: number;
+  mimeType: string;
+  dominantColor: string;
+  addedAt: number;
+  /** Il file è stato eliminato dal sistema: il brano va riscaricato. */
+  lost?: boolean;
+}
+
+export interface LocalPlaylistRecord {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface LocalPlaylistItemRecord {
+  id: string;
+  playlistId: string;
+  trackId: string;
+  position: number;
+  addedAt: number;
+}
+
+export type ImportKind = 'youtube' | 'bridge' | 'redownload';
+
+/** Importazione in coda sul dispositivo (persistente: riprende dopo la chiusura dell'app). */
+export interface ImportRecord {
+  id: string;
+  kind: ImportKind;
+  sourceId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  progress: number;
+  error: string | null;
+  errorCode: string | null;
+  trackId: string | null;
+  /** Brano da sostituire (riscaricamento di un brano perso). */
+  replaceTrackId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DeviceSettings {
+  bridge: { url: string; token: string } | null;
+  lastBackupAt: number | null;
+  addedSinceBackup: number;
+}
+
 export interface SpookyfyDB extends DBSchema {
   /** Metadati dei brani noti (scaricati o presenti in liste salvate offline). */
   tracks: { key: string; value: TrackDto };
@@ -37,10 +93,22 @@ export interface SpookyfyDB extends DBSchema {
   meta: { key: keyof MetaValues; value: MetaValues[keyof MetaValues] };
   pendingPlays: { key: string; value: PlayEvent };
   downloadQueue: { key: string; value: QueuedDownload; indexes: { byEnqueued: number } };
+  // v2: libreria sul dispositivo (modalità client).
+  libTracks: { key: string; value: LocalTrackRecord; indexes: { bySourceKey: string; byAddedAt: number } };
+  libFavorites: { key: string; value: { trackId: string; createdAt: number } };
+  libPlaylists: { key: string; value: LocalPlaylistRecord };
+  libPlaylistItems: {
+    key: string;
+    value: LocalPlaylistItemRecord;
+    indexes: { byPlaylist: string; byTrack: string };
+  };
+  libPlays: { key: string; value: PlayEvent; indexes: { byTrack: string; byPlayedAt: number } };
+  imports: { key: string; value: ImportRecord; indexes: { byCreatedAt: number } };
+  settings: { key: 'device'; value: DeviceSettings };
 }
 
 export const DB_NAME = 'spookyfy';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export type Db = IDBPDatabase<SpookyfyDB>;
 
@@ -57,6 +125,23 @@ export const MIGRATIONS: Record<number, (db: IDBPDatabase<SpookyfyDB>) => void> 
     db.createObjectStore('pendingPlays', { keyPath: 'id' });
     const queue = db.createObjectStore('downloadQueue', { keyPath: 'trackId' });
     queue.createIndex('byEnqueued', 'enqueuedAt');
+  },
+  // Aggiunta non distruttiva: in modalità on-premise questi store restano vuoti.
+  2: (db) => {
+    const tracks = db.createObjectStore('libTracks', { keyPath: 'id' });
+    tracks.createIndex('bySourceKey', 'sourceKey', { unique: true });
+    tracks.createIndex('byAddedAt', 'addedAt');
+    db.createObjectStore('libFavorites', { keyPath: 'trackId' });
+    db.createObjectStore('libPlaylists', { keyPath: 'id' });
+    const items = db.createObjectStore('libPlaylistItems', { keyPath: 'id' });
+    items.createIndex('byPlaylist', 'playlistId');
+    items.createIndex('byTrack', 'trackId');
+    const plays = db.createObjectStore('libPlays', { keyPath: 'id' });
+    plays.createIndex('byTrack', 'trackId');
+    plays.createIndex('byPlayedAt', 'playedAt');
+    const imports = db.createObjectStore('imports', { keyPath: 'id' });
+    imports.createIndex('byCreatedAt', 'createdAt');
+    db.createObjectStore('settings');
   },
 };
 

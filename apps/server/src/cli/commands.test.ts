@@ -72,3 +72,24 @@ test('comandi sconosciuti o incompleti mostrano l’uso', async () => {
   expect(await runCli(['user:create'], b.cli)).toBe(1);
   expect(b.err.join()).toContain('Manca lo username');
 });
+
+test('token:create, token:list e token:revoke', async () => {
+  await runCli(['user:create', 'anna'], io(['Luna_2026']).cli);
+  const created = io([]);
+  expect(await runCli(['token:create', 'anna', 'iPhone', 'client'], created.cli)).toBe(0);
+  const token = created.out[1]!;
+  expect(token).toMatch(/^spk_/);
+  const id = /id (\w+)/.exec(created.out[0]!)![1]!;
+
+  const list = io([]);
+  expect(await runCli(['token:list', 'anna'], list.cli)).toBe(0);
+  expect(list.out.join()).toContain('iPhone client');
+  expect(list.out.join()).not.toContain(token);
+
+  expect(await runCli(['token:revoke', id], io([]).cli)).toBe(0);
+  const missing = io([]);
+  expect(await runCli(['token:revoke', id], missing.cli)).toBe(1);
+  expect(missing.err.join()).toContain('non trovato');
+  expect(await runCli(['token:create', 'nessuno', 'x'], io([]).cli)).toBe(1);
+  expect(await runCli(['token:create', 'anna'], io([]).cli)).toBe(1);
+});

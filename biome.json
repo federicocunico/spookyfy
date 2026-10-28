@@ -3,6 +3,8 @@
   "files": {
     "ignore": [
       "**/dist/**",
+      "**/.vercel/**",
+      "apps/gateway/public/**",
       "**/node_modules/**",
       "**/coverage/**",
       "openspec/**",

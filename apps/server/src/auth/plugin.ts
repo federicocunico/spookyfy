@@ -9,14 +9,18 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../app.js';
 import { HttpError, parseOrThrow } from '../http-errors.js';
+import { bearerToken, isBridgeRoute } from './bridge.js';
 import { FailureRateLimiter } from './rate-limit.js';
 import { SESSION_TTL_MS, type SessionService } from './sessions.js';
+import type { AccessTokenService } from './tokens.js';
 import type { UserService } from './users.js';
 
 export const SESSION_COOKIE = 'spk_session';
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+/** Tentativi con token di accesso non valido tollerati per IP nella finestra. */
+const TOKEN_RATE_LIMIT_MAX = 20;
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -25,6 +29,8 @@ declare module 'fastify' {
   }
   interface FastifyRequest {
     user?: MeDto;
+    /** Come è stata autenticata la richiesta. */
+    authKind?: 'session' | 'token';
   }
 }
 
@@ -61,6 +67,7 @@ function tooManyRequests(retryAfterMs: number): HttpError {
 export interface AuthServices {
   users: UserService;
   sessions: SessionService;
+  tokens: AccessTokenService;
 }
 
 export function isApiUrl(url: string): boolean {
@@ -73,7 +80,9 @@ export function isApiUrl(url: string): boolean {
  */
 export function registerAuth(app: FastifyInstance, ctx: AppContext, services: AuthServices): void {
   const { config, clock } = ctx;
-  const { users, sessions } = services;
+  const { users, sessions, tokens } = services;
+  const bridgeEnabled = config.bridgeAllowedOrigins.length > 0;
+  const tokenLimiter = new FailureRateLimiter(TOKEN_RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS, clock);
   const loginLimiter = new FailureRateLimiter(RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS, clock);
   const registerLimiter = new FailureRateLimiter(RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS, clock);
 
@@ -88,7 +97,26 @@ export function registerAuth(app: FastifyInstance, ctx: AppContext, services: Au
   };
 
   app.addHook('onRequest', async (request, reply) => {
-    if (!isApiUrl(request.url)) return;
+    if (!isApiUrl(request.url) || request.method === 'OPTIONS') return;
+
+    // Ponte: token di accesso personale, solo sulle rotte del ponte. Il browser non
+    // allega il token da solo e un sito terzo non lo conosce: niente rischio CSRF, quindi
+    // niente controllo Origin. Vale anche se la richiesta porta un cookie (alcuni browser
+    // lo inviano nonostante credentials: "omit"): il token valido ha la precedenza.
+    const bearer = bearerToken(request);
+    if (bearer && bridgeEnabled && isBridgeRoute(request.method, request.url)) {
+      const ip = clientIp(request, config.trustCfHeaders);
+      const wait = tokenLimiter.retryAfterMs(ip);
+      if (wait > 0) throw tooManyRequests(wait);
+      const user = tokens.validate(bearer);
+      if (!user) {
+        tokenLimiter.recordFailure(ip);
+        throw new HttpError(401, ErrorCode.Unauthenticated, 'Token di accesso non valido o revocato');
+      }
+      request.user = user;
+      request.authKind = 'token';
+      return;
+    }
 
     if (UNSAFE_METHODS.has(request.method) && request.headers.origin !== config.publicOrigin) {
       throw new HttpError(403, ErrorCode.ForbiddenOrigin, 'Origine della richiesta non consentita');
@@ -101,6 +129,7 @@ export function registerAuth(app: FastifyInstance, ctx: AppContext, services: Au
       throw new HttpError(401, ErrorCode.Unauthenticated, 'Sessione non valida o scaduta');
     }
     request.user = session.user;
+    request.authKind = 'session';
     if (session.renewed) setSessionCookie(reply, token, session.expiresAt);
   });
 

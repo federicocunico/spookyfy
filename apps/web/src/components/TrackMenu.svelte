@@ -4,7 +4,7 @@ import Cover from './Cover.svelte';
 import Icon, { type IconName } from './Icon.svelte';
 import Sheet from './Sheet.svelte';
 
-const { ui, player, library, downloads, toasts, connection } = services();
+const { ui, player, library, downloads, toasts, connection, mode, device } = services();
 const state = $derived(ui.menu);
 
 function close() {
@@ -58,18 +58,39 @@ const actions = $derived.by((): Action[] => {
         ui.addToPlaylist = track;
       },
     },
-    {
-      id: 'download',
-      label: status === 'none' ? 'Scarica' : 'Rimuovi download',
-      icon: status === 'none' ? 'cloud' : 'check',
-      online: status === 'none',
-      run: () =>
-        run(
-          () => (status === 'none' ? downloads.download(track) : downloads.remove(track.id)),
-          'Operazione non riuscita',
-        ),
-    },
+    ...(mode === 'client'
+      ? []
+      : [
+          {
+            id: 'download',
+            label: status === 'none' ? 'Scarica' : 'Rimuovi download',
+            icon: status === 'none' ? 'cloud' : 'check',
+            online: status === 'none',
+            run: () =>
+              run(
+                () => (status === 'none' ? downloads.download(track) : downloads.remove(track.id)),
+                'Operazione non riuscita',
+              ),
+          } satisfies Action,
+        ]),
   ];
+  // Modalità client: un brano perso dal sistema si può riscaricare (solo se viene da YouTube).
+  const record = device?.library.record(track.id);
+  if (device && record?.lost && record.sourceKey.startsWith('youtube:')) {
+    list.unshift({
+      id: 'redownload',
+      label: 'Riscarica',
+      icon: 'cloud',
+      online: true,
+      run: () =>
+        run(async () => {
+          await device.importer.enqueue('redownload', record.sourceKey.slice(8), {
+            replaceTrackId: track.id,
+          });
+          toasts.show(`«${track.title}» in riscaricamento`);
+        }, 'Riscaricamento non avviato'),
+    });
+  }
   if (playlistId && itemId) {
     list.push({
       id: 'remove-from-playlist',
@@ -93,7 +114,7 @@ const actions = $derived.by((): Action[] => {
     },
     {
       id: 'delete',
-      label: 'Elimina dalla libreria',
+      label: mode === 'client' ? 'Elimina dal dispositivo' : 'Elimina dalla libreria',
       icon: 'trash',
       online: true,
       danger: true,
@@ -101,7 +122,10 @@ const actions = $derived.by((): Action[] => {
         close();
         ui.confirm = {
           title: 'Eliminare il brano?',
-          message: `«${track.title}» verrà eliminato dalla libreria per tutti gli account, insieme al file sul server.`,
+          message:
+            mode === 'client'
+              ? `«${track.title}» verrà eliminato da questo dispositivo, insieme al file audio.`
+              : `«${track.title}» verrà eliminato dalla libreria per tutti gli account, insieme al file sul server.`,
           confirmLabel: 'Elimina',
           danger: true,
           confirm: async () => {
@@ -136,7 +160,7 @@ const actions = $derived.by((): Action[] => {
             class="action"
             class:danger={a.danger}
             data-action={a.id}
-            disabled={a.online && connection.offline}
+            disabled={a.online && connection.offline && (mode === 'onpremise' || a.id === 'redownload')}
             onclick={a.run}
           >
             <Icon name={a.icon} />
