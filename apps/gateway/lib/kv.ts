@@ -1,4 +1,6 @@
 import { Redis } from '@upstash/redis';
+import { type RedisClientType, createClient } from 'redis';
+import type { KvConfig } from './config.js';
 
 export interface Clock {
   now(): number;
@@ -62,6 +64,75 @@ export class UpstashKv implements Kv {
   smembers(key: string) {
     return this.redis.smembers(key);
   }
+}
+
+/**
+ * Redis via TCP (Redis Cloud dal Marketplace Vercel, piano Free). Una connessione per
+ * istanza della funzione, aperta alla prima richiesta; valori serializzati in JSON.
+ */
+export class RedisKv implements Kv {
+  private readonly client: RedisClientType;
+  private connecting: Promise<unknown> | null = null;
+  constructor(url: string) {
+    this.client = createClient({ url, socket: { connectTimeout: 5000 } });
+    this.client.on('error', (e: Error) => console.error('Redis:', e.message));
+  }
+  private async c(): Promise<RedisClientType> {
+    if (!this.client.isOpen) {
+      this.connecting ??= this.client.connect().catch((e) => {
+        this.connecting = null;
+        throw e;
+      });
+      await this.connecting;
+    }
+    return this.client;
+  }
+  async get<T>(key: string) {
+    return parse<T>(await (await this.c()).get(key));
+  }
+  async mget<T extends unknown[]>(...keys: string[]) {
+    const values = await (await this.c()).mGet(keys);
+    return values.map((v) => parse(v)) as { [K in keyof T]: T[K] | null };
+  }
+  async set(key: string, value: unknown, opts: { nx?: boolean; exSeconds?: number } = {}) {
+    const res = await (await this.c()).set(key, JSON.stringify(value), {
+      ...(opts.nx ? { NX: true as const } : {}),
+      ...(opts.exSeconds ? { EX: Math.max(1, Math.ceil(opts.exSeconds)) } : {}),
+    });
+    return res === 'OK';
+  }
+  async del(...keys: string[]) {
+    return keys.length ? (await this.c()).del(keys) : 0;
+  }
+  async incrWindow(key: string, windowSeconds: number) {
+    const c = await this.c();
+    const n = await c.incr(key);
+    if (n === 1) await c.expire(key, windowSeconds);
+    return n;
+  }
+  async pttl(key: string) {
+    return (await this.c()).pTTL(key);
+  }
+  async sadd(key: string, member: string) {
+    await (await this.c()).sAdd(key, member);
+  }
+  async srem(key: string, member: string) {
+    await (await this.c()).sRem(key, member);
+  }
+  async smembers(key: string) {
+    return (await this.c()).sMembers(key);
+  }
+  async close() {
+    if (this.client.isOpen) await this.client.quit();
+  }
+}
+
+function parse<T>(v: string | null | undefined): T | null {
+  return v === null || v === undefined ? null : (JSON.parse(v) as T);
+}
+
+export function createKv(config: KvConfig): Kv {
+  return config.kind === 'redis' ? new RedisKv(config.url) : new UpstashKv(config.url, config.token);
 }
 
 interface Entry {

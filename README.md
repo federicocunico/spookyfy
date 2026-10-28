@@ -38,19 +38,22 @@ Vercel       telefono (PWA + libreria nel browser) ──▶ gateway: login, ric
 
 ## Installazione su Vercel
 
-1. Vercel → **Add New → Project** → importa il repository.
-2. **Root Directory: `apps/gateway`** (Framework: *Other*), con *Include files outside the root directory* attivo.
-3. **Storage → Marketplace → Upstash for Redis**, collegato al progetto.
-4. **Settings → Environment Variables**:
+Un solo progetto Vercel serve sia l'app da installare sia le API. Istanza attuale: **https://spookyfy-ten.vercel.app**.
 
-   ```bash
-   SESSION_SECRET=...        # genera con: openssl rand -base64 48
-   REGISTRATION_TOKEN=...    # il tuo token di invito
-   ```
+```bash
+vercel login
+vercel project add spookyfy && vercel link --yes --project spookyfy --scope <team>
+# Dashboard → Settings → Build and Deployment: Root Directory apps/gateway,
+# "Include files outside the root directory" attivo, Framework Other, Node 22.x
+vercel integration add redis --plan 26483 -m Region=fra1 -m HighAvailability=None -e production   # Redis Free 30 MB
+vercel env add SESSION_SECRET production --sensitive --yes --value "$(openssl rand -base64 48)"
+vercel env add REGISTRATION_TOKEN production --sensitive --yes --value 'il-tuo-token-di-invito'
+vercel deploy --prod
+```
 
-5. **Deploy**, poi apri l'URL dal telefono → *Crea un account* con il token.
+Poi apri l'URL dal telefono → *Crea un account* con il token. I deploy successivi li fa la CI a ogni push su `main` (secret `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`): dettagli in [docs/deploy-vercel.md](docs/deploy-vercel.md).
 
-YouTube può bloccare gli IP di Vercel: in quel caso usa **Libreria → Importa da file** o il [ponte verso un on-premise](docs/bridge.md). Fai spesso **Impostazioni → Backup**: la libreria esiste solo sul telefono.
+YouTube blocca l'audio richiesto dagli IP di Vercel (la ricerca funziona): per aggiungere brani usa **Libreria → Importa da file** o il [ponte verso un on-premise](docs/bridge.md). Fai spesso **Impostazioni → Backup**: la libreria esiste solo sul telefono.
 
 ## Installazione on-premise
 

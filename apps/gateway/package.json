@@ -20,6 +20,7 @@
     "@spookyfy/shared": "workspace:*",
     "@upstash/redis": "^1.40.0",
     "jose": "^6.2.13",
+    "redis": "^5.8.0",
     "youtubei.js": "^18.3.0",
     "zod": "^3.25.0"
   },

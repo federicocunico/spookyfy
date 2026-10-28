@@ -49,7 +49,22 @@ describe('configurazione', () => {
       UPSTASH_REDIS_REST_TOKEN: 'tok',
     });
     expect(c.publicOrigin).toBe('https://spookyfy.vercel.app');
-    expect(c.kv).toEqual({ url: 'https://eu1-x.upstash.io', token: 'tok' });
+    expect(c.kv).toEqual({ kind: 'upstash', url: 'https://eu1-x.upstash.io', token: 'tok' });
+    // REDIS_URL (integrazione Redis Cloud) ha la precedenza.
+    expect(
+      loadGatewayConfig({
+        SESSION_SECRET: 'x'.repeat(40),
+        PUBLIC_ORIGIN: 'https://a.test',
+        REDIS_URL: 'redis://u:p@h:1',
+      }).kv,
+    ).toEqual({ kind: 'redis', url: 'redis://u:p@h:1' });
+    expect(() =>
+      loadGatewayConfig({
+        SESSION_SECRET: 'x'.repeat(40),
+        PUBLIC_ORIGIN: 'https://a.test',
+        REDIS_URL: 'http://h',
+      }),
+    ).toThrow(/REDIS_URL/);
     expect(c.registrationToken).toBe('spotifymerdacostosa2026');
     expect(
       loadGatewayConfig({

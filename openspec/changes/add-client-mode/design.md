@@ -76,7 +76,7 @@ Ricerca locale: normalizzazione (NFD senza diacritici, minuscole) su titolo, art
 
 ### D5. Autenticazione sul gateway
 
-- **KV**: Upstash Redis tramite l'integrazione di Vercel (`@upstash/redis`, via REST, adatto alle funzioni). Chiavi: `user:<username normalizzato>` → `{ id, username, passwordHash, createdAt, sessionEpoch }`; `revoked:<jti>` con TTL fino alla scadenza del token; `rl:login:<ip>|<user>` e `rl:reg:<ip>` con `INCR` + `EXPIRE 900`. La creazione usa `SET ... NX` per garantire l'unicità anche con registrazioni concorrenti.
+- **KV**: Redis Cloud dal Marketplace di Vercel, piano Free da 30 MB (`redis` via TCP, una connessione per istanza della funzione; `REDIS_URL`). Upstash Redis via REST (`@upstash/redis`) resta supportato, ma il suo piano gratuito non era disponibile sull'account. Il gateway sceglie in base alle variabili presenti. Chiavi: `user:<username normalizzato>` → `{ id, username, passwordHash, createdAt, sessionEpoch }`; `revoked:<jti>` con TTL fino alla scadenza del token; `rl:login:<ip>|<user>` e `rl:reg:<ip>` con `INCR` + `EXPIRE 900`. La creazione usa `SET ... NX` per garantire l'unicità anche con registrazioni concorrenti.
 - **Regole condivise**: schemi di username, password e registrazione e messaggi d'errore da `packages/shared`; token di invito da `REGISTRATION_TOKEN` (stesse regole e stesso confronto in tempo costante dell'on-premise); hash Argon2id con `@node-rs/argon2` (binario prebuilt `linux-x64-gnu`).
 - **Sessione**: JWT HS256 (`jose`) firmato con `SESSION_SECRET`, claim `sub`, `usr`, `ep` (sessionEpoch), `jti`, scadenza 30 giorni, in cookie `spk_session` HttpOnly, Secure, SameSite=Lax. Rinnovo: se il token ha più di un'ora se ne emette uno nuovo. Verifica a ogni richiesta autenticata: firma e scadenza, poi una sola lettura `MGET user:<u> revoked:<jti>` per confrontare `ep` e revoca. Logout: `revoked:<jti>`. Cambio password o eliminazione: incremento di `sessionEpoch` o rimozione dell'utente.
 - **CSRF**: stesso controllo `Origin` dell'on-premise contro `PUBLIC_ORIGIN`. IP del client da `x-forwarded-for` impostato da Vercel.
@@ -141,13 +141,13 @@ All'avvio e su `visibilitychange` si confrontano `libTracks` con `spk-device-aud
 - [Fair use e termini del piano Hobby di Vercel (uso personale, banda inclusa limitata)] → uso personale dichiarato nel README; il traffico audio passa dal gateway solo una volta per brano.
 - [Doppio trasferimento quando si ascolta durante l'importazione] → accettato, come in on-premise.
 - [Token del ponte salvato sul telefono] → token revocabile, limitato alle rotte d'importazione e lettura, mai inviato insieme ai cookie.
-- [Consumo di comandi del KV (verifica sessione a ogni richiesta)] → una sola `MGET` per richiesta; il piano gratuito di Upstash è ampiamente sufficiente per uso personale.
+- [Consumo di comandi del KV (verifica sessione a ogni richiesta)] → una sola `MGET` per richiesta; il piano gratuito di Redis Cloud (30 MB) è ampiamente sufficiente per uso personale.
 
 ## Migration Plan
 
 1. Archiviare `add-spookyfy-mvp` (le sue spec diventano principali; `user-auth` viene poi modificata da questa change).
 2. Le modifiche all'on-premise sono additive: la nuova tabella dei token si crea con la migrazione automatica all'avvio; senza `BRIDGE_ALLOWED_ORIGINS` il comportamento resta identico a prima.
-3. Deploy del gateway: progetto Vercel (Root Directory `apps/gateway`), integrazione Upstash Redis, variabili `SESSION_SECRET`, `REGISTRATION_TOKEN`, `PUBLIC_ORIGIN`; primo account dalla CLI o dall'app con il token.
+3. Deploy del gateway: progetto Vercel (Root Directory `apps/gateway`), integrazione Redis (Free 30 MB), variabili `SESSION_SECRET`, `REGISTRATION_TOKEN`, `PUBLIC_ORIGIN`; primo account dalla CLI o dall'app con il token.
 4. Rollback: il gateway è un deployment separato e si può rimuovere senza effetti sull'on-premise; sul telefono i dati della modalità client restano in IndexedDB e Cache Storage finché l'utente non li cancella.
 
 ## Open Questions

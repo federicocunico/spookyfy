@@ -1,6 +1,6 @@
 import { loadGatewayConfig } from './config.js';
 import type { GatewayDeps } from './handlers.js';
-import { type Kv, MemoryKv, UpstashKv, systemClock } from './kv.js';
+import { type Kv, MemoryKv, createKv, systemClock } from './kv.js';
 import { InnertubeYoutube } from './youtube-innertube.js';
 
 let current: GatewayDeps | null = null;
@@ -13,9 +13,9 @@ export function deps(): GatewayDeps {
   if (current) return current;
   const config = loadGatewayConfig();
   let kv: Kv;
-  if (config.kv) kv = new UpstashKv(config.kv.url, config.kv.token);
+  if (config.kv) kv = createKv(config.kv);
   else if (config.nodeEnv !== 'production') kv = new MemoryKv();
-  else throw new Error('Credenziali del KV mancanti (integrazione Upstash Redis su Vercel)');
+  else throw new Error("KV mancante: collega al progetto Vercel l'integrazione Redis (REDIS_URL) o Upstash");
   current = {
     config,
     kv,

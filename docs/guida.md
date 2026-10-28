@@ -140,18 +140,21 @@ Seconda modalità, senza server da gestire: il gateway gira su **Vercel** (piano
 
 ### Deploy
 
+Procedura completa da riga di comando, CI compresa: [deploy-vercel.md](deploy-vercel.md).
+
 1. Su [vercel.com](https://vercel.com) → *Add New… → Project* → importa questo repository.
 2. **Root Directory: `apps/gateway`**. Lascia attiva l'opzione *Include files outside the root directory* (serve per il monorepo). Framework: *Other*; il resto è già in `apps/gateway/vercel.json` (installazione pnpm, build della PWA, durate delle funzioni, region `fra1`).
-3. *Storage* → *Marketplace* → **Upstash for Redis** (piano gratuito) collegato al progetto: imposta da sé `KV_REST_API_URL` e `KV_REST_API_TOKEN`. Nel KV finiscono solo account, revoche di sessione e contatori anti-brute-force.
+3. *Storage* → *Create Database* → **Redis** (Redis Cloud, piano **Free — 30 MB**) collegato al progetto: imposta da sé `REDIS_URL`. In alternativa funziona anche Upstash for Redis (`KV_REST_API_URL` e `KV_REST_API_TOKEN`). Nel KV finiscono solo account, revoche di sessione e contatori anti-brute-force.
 4. *Settings → Environment Variables*:
    - `SESSION_SECRET`: almeno 32 caratteri casuali (`openssl rand -base64 48`);
    - `REGISTRATION_TOKEN`: il token di invito (cambia quello predefinito; vuoto = registrazione disabilitata);
    - `PUBLIC_ORIGIN`: solo se usi un dominio personalizzato (di default è il dominio di produzione del progetto).
 5. *Deploy*. Apri l'URL del progetto dal telefono, crea l'account con il token e aggiungi l'app alla schermata Home.
 
-Account dalla riga di comando (sul tuo computer, con le credenziali del KV copiate in `apps/gateway/.env`, vedi `apps/gateway/.env.example`):
+Account dalla riga di comando (sul tuo computer):
 
 ```bash
+vercel env pull apps/gateway/.env --environment=production --yes
 pnpm --filter @spookyfy/gateway cli user:create fede
 pnpm --filter @spookyfy/gateway cli user:list
 ```

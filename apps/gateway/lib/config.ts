@@ -17,6 +17,11 @@ const envSchema = z
       .optional(),
     /** Impostata da Vercel: dominio di produzione del progetto. */
     VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
+    /** Integrazione Redis (Redis Cloud) del Marketplace Vercel: connessione TCP. */
+    REDIS_URL: z
+      .string()
+      .regex(/^rediss?:\/\//, 'deve iniziare con redis:// o rediss://')
+      .optional(),
     // Credenziali dell'integrazione Upstash Redis (nomi usati da Vercel o da Upstash).
     KV_REST_API_URL: z.string().url().optional(),
     KV_REST_API_TOKEN: z.string().optional(),
@@ -34,12 +39,34 @@ const envSchema = z
     }
   });
 
+/** Dove stanno account, revoche e contatori: Redis via TCP o Upstash via REST. */
+export type KvConfig = { kind: 'redis'; url: string } | { kind: 'upstash'; url: string; token: string };
+
+/** KV dalle variabili d'ambiente (REDIS_URL ha la precedenza sulle credenziali Upstash). */
+type KvEnv = Partial<
+  Record<
+    | 'REDIS_URL'
+    | 'KV_REST_API_URL'
+    | 'KV_REST_API_TOKEN'
+    | 'UPSTASH_REDIS_REST_URL'
+    | 'UPSTASH_REDIS_REST_TOKEN',
+    string
+  >
+>;
+
+export function kvConfigFromEnv(env: KvEnv): KvConfig | null {
+  if (env.REDIS_URL) return { kind: 'redis', url: env.REDIS_URL };
+  const url = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL;
+  const token = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { kind: 'upstash', url, token } : null;
+}
+
 export interface GatewayConfig {
   nodeEnv: 'development' | 'production' | 'test';
   sessionSecret: string;
   registrationToken: string;
   publicOrigin: string;
-  kv: { url: string; token: string } | null;
+  kv: KvConfig | null;
   cookieSecure: boolean;
   version: string;
 }
@@ -61,14 +88,12 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
   if (!r.success)
     throw new GatewayConfigError(r.error.issues.map((i) => `${i.path.join('.') || 'env'}: ${i.message}`));
   const e = r.data;
-  const url = e.KV_REST_API_URL ?? e.UPSTASH_REDIS_REST_URL;
-  const token = e.KV_REST_API_TOKEN ?? e.UPSTASH_REDIS_REST_TOKEN;
   return {
     nodeEnv: e.NODE_ENV,
     sessionSecret: e.SESSION_SECRET,
     registrationToken: e.REGISTRATION_TOKEN,
     publicOrigin: e.PUBLIC_ORIGIN ?? `https://${e.VERCEL_PROJECT_PRODUCTION_URL}`,
-    kv: url && token ? { url, token } : null,
+    kv: kvConfigFromEnv(e),
     cookieSecure: e.COOKIE_SECURE,
     version: GATEWAY_VERSION,
   };

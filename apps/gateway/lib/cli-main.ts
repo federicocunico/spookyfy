@@ -1,12 +1,12 @@
 import readline from 'node:readline';
 import { runGatewayCli } from './cli.js';
-import { UpstashKv, systemClock } from './kv.js';
+import { kvConfigFromEnv } from './config.js';
+import { createKv, systemClock } from './kv.js';
 
-const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-if (!url || !token) {
+const kvConfig = kvConfigFromEnv(process.env);
+if (!kvConfig) {
   console.error(
-    'Mancano KV_REST_API_URL e KV_REST_API_TOKEN (copiali dal progetto Vercel in apps/gateway/.env).',
+    'Manca REDIS_URL (o KV_REST_API_URL e KV_REST_API_TOKEN): esegui vercel env pull apps/gateway/.env',
   );
   process.exit(1);
 }
@@ -34,7 +34,7 @@ async function readPassword(prompt: string): Promise<string> {
 }
 
 const code = await runGatewayCli(process.argv.slice(2), {
-  kv: new UpstashKv(url, token),
+  kv: createKv(kvConfig),
   clock: systemClock,
   interactive: Boolean(process.stdin.isTTY),
   readPassword,
