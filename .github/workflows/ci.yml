@@ -66,6 +66,8 @@ jobs:
           node-version-file: .nvmrc
       - run: corepack enable
       - run: npm install --global vercel@50.32.3
+      # Token valido e con accesso al team del progetto (altrimenti pull fallisce senza spiegazioni).
+      - run: vercel whoami --token="$VERCEL_TOKEN" && vercel project ls --token="$VERCEL_TOKEN" | grep -q spookyfy
       - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - run: vercel build --prod --token="$VERCEL_TOKEN"
       - id: deploy
