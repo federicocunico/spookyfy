@@ -60,7 +60,7 @@
 - [x] 7.1 Aggiungere agli e2e un finto MusicBrainz/Cover Art Archive/iTunes (piccolo server locale) collegato a server e dev-server del gateway tramite gli URL di base; verificare che i test esistenti passino invariati
 - [x] 7.2 Scrivere l'e2e on-premise: due brani dello stesso album raggruppati, copertina applicata automaticamente e visibile nel player, riordino, genere sull'album e ascolto per genere; verificare che passi su Chromium e WebKit
 - [x] 7.3 Scrivere l'e2e in modalità client: importazione di file con album, genere e numero di traccia, scelta della copertina da un candidato, backup e ripristino con album e generi; verificare che passi su Chromium e WebKit
-- [ ] 7.4 Eseguire lint, typecheck, test di tutti i pacchetti ed e2e completi, rigenerare gli screenshot del README se la Libreria è cambiata e verificare che la CI su `main` sia verde
+- [x] 7.4 Eseguire lint, typecheck, test di tutti i pacchetti ed e2e completi, rigenerare gli screenshot del README se la Libreria è cambiata e verificare che la CI su `main` sia verde
 
 ## Workflow follow-up
 
