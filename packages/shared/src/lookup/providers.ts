@@ -152,7 +152,15 @@ export function createAlbumLookup(config: LookupConfig): AlbumLookup {
           score: g.score ?? 0,
         }));
     }
-    const query = [`recording:${lucene(q.title ?? '')}`, q.artist ? `artist:${lucene(q.artist)}` : null]
+    // Solo album ufficiali: senza filtri i primi risultati sono spesso bootleg e registrazioni dal vivo.
+    const query = [
+      `recording:${lucene(q.title ?? '')}`,
+      q.artist ? `artist:${lucene(q.artist)}` : null,
+      'primarytype:album',
+      'status:official',
+      '-secondarytype:live',
+      '-secondarytype:compilation',
+    ]
       .filter(Boolean)
       .join(' AND ');
     const data = (await limiter.schedule(() =>
@@ -164,17 +172,33 @@ export function createAlbumLookup(config: LookupConfig): AlbumLookup {
         tags?: MbTag[];
         releases?: {
           date?: string;
+          status?: string;
           'artist-credit'?: MbCredit[];
-          'release-group'?: { id?: string; title?: string; 'primary-type'?: string };
+          'release-group'?: {
+            id?: string;
+            title?: string;
+            'primary-type'?: string;
+            'secondary-types'?: string[];
+          };
         }[];
       }[];
     };
-    const out: LookupCandidateDto[] = [];
+    // Un candidato per album; l'album in cui il brano compare più volte (edizioni, ristampe) va in testa.
+    const byGroup = new Map<string, LookupCandidateDto & { hits: number }>();
     for (const r of data.recordings ?? []) {
       for (const rel of r.releases ?? []) {
         const g = rel['release-group'];
         if (!g?.id || !g.title) continue;
-        out.push({
+        if (rel.status && rel.status !== 'Official') continue;
+        if (g['secondary-types']?.some((t) => t === 'Live' || t === 'Compilation')) continue;
+        const prev = byGroup.get(g.id);
+        if (prev) {
+          prev.hits++;
+          const year = yearOf(rel.date);
+          if (year !== null && (prev.year === null || year < prev.year)) prev.year = year;
+          continue;
+        }
+        byGroup.set(g.id, {
           id: `mb:${g.id}`,
           source: 'musicbrainz',
           title: g.title,
@@ -184,10 +208,11 @@ export function createAlbumLookup(config: LookupConfig): AlbumLookup {
           ...caa(g.id),
           // Gli album veri prima di raccolte e singoli.
           score: (r.score ?? 0) - (g['primary-type'] === 'Album' ? 0 : 5),
+          hits: 1,
         });
       }
     }
-    return out;
+    return [...byGroup.values()].map(({ hits, ...c }) => ({ ...c, score: c.score + Math.min(hits, 10) }));
   }
 
   async function itunes(q: LookupQuery, signal?: AbortSignal): Promise<LookupCandidateDto[]> {

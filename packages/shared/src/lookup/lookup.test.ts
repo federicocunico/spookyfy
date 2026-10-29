@@ -126,6 +126,43 @@ describe('ricerca su MusicBrainz e iTunes', () => {
     expect(decodeURIComponent(String(fetch.mock.calls[1]?.[0]))).toContain('entity=song');
   });
 
+  test('brano: solo album ufficiali, niente live né bootleg; in testa l’album con più edizioni', async () => {
+    const rel = (id: string, title: string, o: Record<string, unknown> = {}) => ({
+      status: 'Official',
+      date: '1991-09-24',
+      'release-group': { id, title, 'primary-type': 'Album', ...o },
+    });
+    const fetch = fakeFetch({
+      'https://musicbrainz.org/ws/2/recording/': () =>
+        json({
+          recordings: [
+            {
+              score: 100,
+              'artist-credit': [{ name: 'Nirvana' }],
+              releases: [
+                rel('b', '1994-02-22: Roma', {}),
+                rel('c', 'Unplugged', { 'secondary-types': ['Live'] }),
+              ].map((r, i) => (i === 0 ? { ...r, status: 'Bootleg' } : r)),
+            },
+            { score: 100, 'artist-credit': [{ name: 'Nirvana' }], releases: [rel('u', 'In Utero')] },
+            {
+              score: 100,
+              'artist-credit': [{ name: 'Nirvana' }],
+              releases: [rel('n', 'Nevermind'), rel('n', 'Nevermind', {}), rel('n', 'Nevermind')],
+            },
+          ],
+        }),
+      'https://itunes.apple.com/search': () => json({ results: [] }),
+    });
+    const out = await createAlbumLookup({ fetch, userAgent: 'x', limiter: noLimit }).search({
+      title: 'Smells Like Teen Spirit',
+      artist: 'Nirvana',
+    });
+    expect(out.map((c) => c.title)).toEqual(['Nevermind', 'In Utero']);
+    const query = decodeURIComponent(String(fetch.mock.calls[0]?.[0]));
+    expect(query).toContain('primarytype:album AND status:official AND -secondarytype:live');
+  });
+
   test('MusicBrainz in errore (503): si ripiega su iTunes, con copertina 600×600', async () => {
     const fetch = fakeFetch({
       'https://musicbrainz.org/': () => json({ error: 'busy' }, 503),
