@@ -29,7 +29,7 @@ async function onchange() {
     const rejected = results.some((r) => r.status === 'rejected');
     if (rejected) toasts.error(summary(results));
     else toasts.show(summary(results));
-    void library.loadHome().catch(() => {});
+    for (const r of results) if (r.status === 'imported') library.trackAdded(r.track);
   } catch {
     toasts.error('Importazione dei file non riuscita');
   } finally {

@@ -48,6 +48,13 @@ async function loadMore(reset = false) {
   }
 }
 
+// Brani appena importati (da file o da YouTube): subito in cima, senza ricaricare la lista.
+$effect(() =>
+  library.onTrackAdded((t) => {
+    if (all) all = [t, ...all.filter((x) => x.id !== t.id)];
+  }),
+);
+
 // Scorrimento infinito sulla lista di tutti i brani.
 $effect(() => {
   if (!sentinel) return;

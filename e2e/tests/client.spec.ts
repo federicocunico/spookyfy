@@ -152,3 +152,43 @@ test('modalità client: token del ponte errato rifiutato con un messaggio', asyn
   await page.getByRole('button', { name: 'Verifica e salva' }).click();
   await expect(page.getByTestId('bridge-status')).toContainText(/Token|non valido|revocato/);
 });
+
+/** MP3 valido e silenzioso (come apps/server/test/fixtures/media.ts). */
+function silentMp3(seconds: number): Buffer {
+  const frame = Buffer.alloc(417);
+  frame.set([0xff, 0xfb, 0x90, 0xc0]);
+  return Buffer.concat(Array.from({ length: Math.ceil((seconds * 44100) / 1152) }, () => frame));
+}
+
+async function importAndPlay(page: Page, name: string) {
+  await page.getByRole('link', { name: 'La tua Libreria' }).click();
+  await page
+    .getByTestId('file-input')
+    .setInputFiles({ name: `${name}.mp3`, mimeType: 'audio/mpeg', buffer: silentMp3(3) });
+  const play = page.getByRole('button', { name: new RegExp(`^Riproduci ${name}`) }).first();
+  await expect(play).toBeEnabled({ timeout: 15_000 });
+  await play.click();
+  await expect.poll(async () => (await audioState(page)).src).toBeTruthy();
+  if (canDecode) {
+    await expect.poll(async () => (await audioState(page)).readyState).toBeGreaterThanOrEqual(1);
+    expect((await audioState(page)).error).toBeNull();
+  }
+  await expect(page.getByText('non è disponibile offline')).toHaveCount(0);
+}
+
+test('modalità client: file importato riproducibile alla prima visita, senza ricaricare', async ({
+  page,
+  browserName,
+}) => {
+  await register(page, uniqueUser('clfirst', browserName));
+  await importAndPlay(page, 'Prima visita');
+});
+
+test.describe('senza Service Worker (ricarica forzata con Ctrl+F5)', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('modalità client: file importato comunque riproducibile', async ({ page, browserName }) => {
+    await register(page, uniqueUser('clnosw', browserName));
+    await importAndPlay(page, 'Senza service worker');
+  });
+});

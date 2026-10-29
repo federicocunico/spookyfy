@@ -226,6 +226,35 @@ describe('riproduzione durante l’importazione', () => {
     s.device!.importer.stop();
   });
 
+  test('senza Service Worker (ricarica forzata) il brano sul dispositivo suona dalla Cache Storage', async () => {
+    const s = await setupClientServices();
+    const job = await s.api.remote.ingest('abcdefghijk');
+    if (job.kind === 'job') s.jobs.adopt(job.job);
+    await s.device!.importer.idle();
+    const local = (await s.api.tracks.list({})).items[0]!;
+
+    const sw = navigator.serviceWorker;
+    Object.defineProperty(navigator, 'serviceWorker', { value: { controller: null }, configurable: true });
+    const created: Blob[] = [];
+    URL.createObjectURL = (b: Blob) => {
+      created.push(b);
+      return `blob:test/${created.length}`;
+    };
+    URL.revokeObjectURL = () => {};
+    try {
+      const audio = document.createElement('audio');
+      s.player.attach(audio);
+      s.player.playTracks([local], 0);
+      await expect.poll(() => audio.getAttribute('src')).toBe('blob:test/1');
+      expect(created[0]!.size).toBe(local.sizeBytes);
+      expect(s.player.playing).toBe(true);
+      s.player.detach();
+    } finally {
+      Object.defineProperty(navigator, 'serviceWorker', { value: sw, configurable: true });
+      s.device!.importer.stop();
+    }
+  });
+
   test('offline il brano provvisorio non è riproducibile', async () => {
     const s = await setupClientServices();
     s.connection.set({ online: false });

@@ -34,6 +34,7 @@ export class Library {
   /** Ascoltatori di modifiche ai brani (es. il player aggiorna i metadati). */
   private trackListeners = new Set<(t: TrackDto) => void>();
   private removedListeners = new Set<(id: string) => void>();
+  private addedListeners = new Set<(t: TrackDto) => void>();
 
   constructor(
     private readonly api: Api,
@@ -111,6 +112,18 @@ export class Library {
   onTrackChanged(listener: (t: TrackDto) => void): () => void {
     this.trackListeners.add(listener);
     return () => this.trackListeners.delete(listener);
+  }
+
+  /** Brano appena entrato in libreria (importato da YouTube o da file): in cima alle liste. */
+  trackAdded(track: TrackDto): void {
+    if (this.recentlyAdded)
+      this.recentlyAdded = [track, ...this.recentlyAdded.filter((t) => t.id !== track.id)];
+    for (const l of this.addedListeners) l(track);
+  }
+
+  onTrackAdded(listener: (t: TrackDto) => void): () => void {
+    this.addedListeners.add(listener);
+    return () => this.addedListeners.delete(listener);
   }
 
   onTrackRemoved(listener: (id: string) => void): () => void {

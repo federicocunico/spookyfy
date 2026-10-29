@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { createPartialResponse } from 'workbox-range-requests';
@@ -12,6 +13,11 @@ declare let self: ServiceWorkerGlobalScope;
 const AUDIO_CACHE = 'spk-audio-v1';
 const OFFLINE_COVER_CACHE = 'spk-covers-offline-v1';
 const COVER_CACHE = 'spk-covers-v1';
+
+// Alla prima installazione prende subito il controllo della pagina già aperta: senza, in
+// modalità client i brani sul dispositivo (/local/*) non suonerebbero fino a una ricarica.
+// Gli aggiornamenti restano in attesa del consenso (registerType: prompt), quindi è sicuro.
+clientsClaim();
 
 // App shell disponibile offline.
 precacheAndRoute(self.__WB_MANIFEST);

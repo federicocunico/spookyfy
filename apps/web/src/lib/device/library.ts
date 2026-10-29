@@ -21,6 +21,21 @@ import { getSettings, patchSettings } from './settings';
 export const DEVICE_AUDIO_CACHE = 'spk-device-audio-v1';
 export const DEVICE_COVER_CACHE = 'spk-device-covers-v1';
 
+/**
+ * Gli URL /local/* li serve il Service Worker. Se non controlla la pagina (prima visita
+ * prima che si attivi, ricarica forzata con Ctrl+F5) andrebbero in rete: in quel caso si
+ * legge il file direttamente dalla Cache Storage. null = il Service Worker c'è.
+ */
+export function localFallbackSrc(url: string): Promise<string | null> | null {
+  if (!url.startsWith('/local/') || typeof caches === 'undefined') return null;
+  if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) return null;
+  return (async () => {
+    const cacheName = url.startsWith('/local/audio/') ? DEVICE_AUDIO_CACHE : DEVICE_COVER_CACHE;
+    const res = await (await caches.open(cacheName)).match(absolute(url)).catch(() => undefined);
+    return res ? URL.createObjectURL(await res.blob()) : null;
+  })();
+}
+
 export const localAudioUrl = (id: string) => `/local/audio/${encodeURIComponent(id)}`;
 export const localCoverUrl = (id: string, size: 512 | 128 = 512) =>
   `/local/cover/${encodeURIComponent(id)}?size=${size}`;

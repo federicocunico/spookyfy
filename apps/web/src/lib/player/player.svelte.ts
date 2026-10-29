@@ -36,6 +36,11 @@ export interface PlayerDeps {
   reporter: Pick<PlayReporter, 'record'>;
   mediaSession: MediaSessionBridge;
   storage?: Storage;
+  /**
+   * Sorgente alternativa per un URL che senza Service Worker non funzionerebbe (modalità
+   * client dopo una ricarica forzata): null = si usa l'URL così com'è.
+   */
+  resolveSrc?: (url: string) => Promise<string | null> | null;
 }
 
 /**
@@ -326,11 +331,31 @@ export class Player {
     this.pendingSeek = startAt > 0 ? startAt : null;
     this.position = startAt;
     this.duration = track.durationMs / 1000;
-    // L'URL è sempre quello di rete: se il brano è scaricato lo serve il Service Worker dalla cache.
-    audio.src = track.audioUrl;
     this.deps.mediaSession.setTrack(track);
     this.tracker.start(track.id, track.durationMs);
     this.persist(true);
+    const fallback = this.deps.resolveSrc?.(track.audioUrl) ?? null;
+    if (!fallback) {
+      // L'URL è sempre quello di rete: se il brano è scaricato lo serve il Service Worker dalla cache.
+      this.setSrc(audio, track.audioUrl, autoplay);
+      return;
+    }
+    void fallback.then((src) => {
+      if (this.current?.id !== track.id) return;
+      if (src) this.setSrc(audio, src, autoplay);
+      else {
+        this.deps.toasts.show(`«${track.title}» non è più sul dispositivo`);
+        this.skipToPlayable(autoplay);
+      }
+    });
+  }
+
+  private objectUrl: string | null = null;
+
+  private setSrc(audio: HTMLAudioElement, src: string, autoplay: boolean): void {
+    if (this.objectUrl && this.objectUrl !== src) URL.revokeObjectURL(this.objectUrl);
+    this.objectUrl = src.startsWith('blob:') ? src : null;
+    audio.src = src;
     if (autoplay) {
       void audio.play().catch((err: unknown) => {
         if ((err as Error)?.name !== 'AbortError') this.playing = false;

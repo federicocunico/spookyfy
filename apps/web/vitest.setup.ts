@@ -123,3 +123,12 @@ if (!globalThis.caches) {
     },
   } as unknown as CacheStorage;
 }
+
+// Come in produzione: la pagina è controllata dal Service Worker, che serve gli URL /local/*.
+// I test della riserva senza Service Worker tolgono `controller` per il loro caso.
+if (!('serviceWorker' in navigator)) {
+  Object.defineProperty(navigator, 'serviceWorker', {
+    value: { controller: {} },
+    configurable: true,
+  });
+}

@@ -4,7 +4,7 @@ import { createDeviceBackend } from './device/backend';
 import { getSettings } from './device/backup';
 import { type CoverProcessor, processCover } from './device/cover';
 import { DeviceImporter } from './device/importer';
-import { DeviceLibrary } from './device/library';
+import { DeviceLibrary, localFallbackSrc } from './device/library';
 import { BridgeClient, GatewayClient } from './device/remote';
 import { type Db, getDb } from './offline/db';
 import { Downloads } from './offline/downloads.svelte';
@@ -133,6 +133,7 @@ export function createServices(o: ServiceOverrides = {}): Services {
       isDownloaded: (id) => (dev && id.startsWith('pending:') ? !connection.offline : isLocal(id)),
     },
     connection: dev ? { offline: true } : connection,
+    resolveSrc: dev ? localFallbackSrc : undefined,
     toasts,
     reporter,
     mediaSession: o.mediaSession ?? new MediaSessionBridge(),
@@ -151,8 +152,7 @@ export function createServices(o: ServiceOverrides = {}): Services {
       ? () => {}
       : (track) => void downloads.download(track, { silent: true }).catch(() => {}),
     onTrackAdded: (track) => {
-      if (library.recentlyAdded)
-        library.recentlyAdded = [track, ...library.recentlyAdded.filter((t) => t.id !== track.id)];
+      library.trackAdded(track);
       player.replaceTrack(`pending:${track.sourceId}`, track);
     },
   });
