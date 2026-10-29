@@ -2,7 +2,7 @@
 
 Gateway e PWA della modalità client sono **un solo progetto Vercel** (Root Directory `apps/gateway`): la stessa URL serve l'app da installare sul telefono e le API. Il database è **Redis Cloud Free (30 MB)** dal Marketplace di Vercel, gratuito.
 
-Istanza attuale: **https://spookyfy-ten.vercel.app** (progetto `spookyfy`).
+Istanza attuale: **https://spookyfy-music.vercel.app** (progetto `spookyfy`; risponde anche `spookyfy-ten.vercel.app`, il dominio assegnato da Vercel).
 
 ## 1. Progetto e collegamento
 
@@ -37,7 +37,19 @@ vercel env add SESSION_SECRET production --sensitive --yes --value "$(openssl ra
 vercel env add REGISTRATION_TOKEN production --sensitive --yes --value 'il-tuo-token-di-invito'
 ```
 
-`PUBLIC_ORIGIN` serve solo con un dominio personalizzato. Senza `REGISTRATION_TOKEN` vale `spotifymerdacostosa2026`, pubblico in questo repository: chiunque lo legga può registrarsi.
+**Indirizzo dell'app.** Vercel assegna un nome libero (es. `spookyfy-ten.vercel.app`): `spookyfy.vercel.app` appartiene a un altro account e non si può usare (`alias already in use`). Per un nome scelto da te, tra quelli liberi:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}
+' https://spookyfy-music.vercel.app   # 404 = libero
+vercel domains add spookyfy-music.vercel.app                                # assegnato ai deploy di produzione
+vercel env add PUBLIC_ORIGIN production --yes --value https://spookyfy-music.vercel.app
+gh variable set VERCEL_PRODUCTION_URL --body https://spookyfy-music.vercel.app
+```
+
+Il dominio aggiunto passa al deploy successivo (o subito con `vercel alias set <url-del-deploy> spookyfy-music.vercel.app`).
+
+`PUBLIC_ORIGIN` è il dominio principale dell'app; senza, vale il dominio di produzione assegnato da Vercel. Senza `REGISTRATION_TOKEN` vale `spotifymerdacostosa2026`, pubblico in questo repository: chiunque lo legga può registrarsi.
 
 ## 4. Primo deploy
 

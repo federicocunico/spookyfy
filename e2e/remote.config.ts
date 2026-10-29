@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Gli account di prova vengono eliminati alla fine con la CLI del gateway (serve
  * REDIS_URL, da `vercel env pull apps/gateway/.env`). Vedi docs/verifica-deploy.md.
  */
-export const REMOTE_URL = new URL(process.env.SPOOKYFY_URL ?? 'https://spookyfy-ten.vercel.app').origin;
+export const REMOTE_URL = new URL(process.env.SPOOKYFY_URL ?? 'https://spookyfy-music.vercel.app').origin;
 
 export default defineConfig({
   testDir: './remote',

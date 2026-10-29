@@ -38,7 +38,7 @@ Vercel       telefono (PWA + libreria nel browser) ──▶ gateway: login, ric
 
 ## Installazione su Vercel
 
-Un solo progetto Vercel serve sia l'app da installare sia le API. Istanza attuale: **https://spookyfy-ten.vercel.app**.
+Un solo progetto Vercel serve sia l'app da installare sia le API. Istanza attuale: **https://spookyfy-music.vercel.app**.
 
 ```bash
 vercel login

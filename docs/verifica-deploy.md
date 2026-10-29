@@ -35,7 +35,7 @@ Poi:
 
 ```bash
 export VERIFY_REGISTRATION_TOKEN='il-token-di-invito'    # PowerShell: $env:VERIFY_REGISTRATION_TOKEN='…'
-pnpm verify:prod                                          # https://spookyfy-ten.vercel.app
+pnpm verify:prod                                          # https://spookyfy-music.vercel.app
 pnpm verify:prod https://<progetto>.vercel.app            # altro deploy
 pnpm verify:prod:ui                                       # browser; altro URL con SPOOKYFY_URL=…
 ```
@@ -65,7 +65,8 @@ Se cambi `REGISTRATION_TOKEN` su Vercel, aggiorna anche questo secret.
 
 | Cosa vedi | Causa probabile | Cosa fare |
 |---|---|---|
-| «Origine della richiesta non consentita» | richiesta da un dominio diverso da quello dell'app | apri l'URL di produzione (`https://spookyfy-ten.vercel.app`), non un URL di deploy |
+| «Failed to fetch» o un'app diversa (es. «Spotify Clone») | indirizzo sbagliato: `spookyfy.vercel.app` è di un altro account | apri `https://spookyfy-music.vercel.app` |
+| «Origine della richiesta non consentita» | richiesta da un dominio diverso da quello dell'app | apri l'URL di produzione (`https://spookyfy-music.vercel.app`), non un URL di deploy |
 | Pagina di login di **Vercel** invece dell'app | URL di un singolo deploy (`spookyfy-xxxx-<team>.vercel.app`), protetto da Vercel Authentication | come sopra |
 | «Token di invito non valido» | token diverso da `REGISTRATION_TOKEN` (fino al 29/10/2026 anche per uno spazio incollato in coda) | ricopia il token; verifica con `pnpm verify:prod` |
 | Pulsante «Crea account» grigio | campo non valido: il motivo è scritto in rosso sotto il campo | correggi il campo indicato |

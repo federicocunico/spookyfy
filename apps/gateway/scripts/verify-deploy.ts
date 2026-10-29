@@ -4,7 +4,7 @@
  * un account di prova (registrazione → sessione → ricerca → logout → login), poi
  * eliminato dal database.
  *
- *   pnpm verify:prod                                   # https://spookyfy-ten.vercel.app
+ *   pnpm verify:prod                                   # https://spookyfy-music.vercel.app
  *   pnpm verify:prod https://<progetto>.vercel.app
  *
  * Variabili (lette anche da apps/gateway/.env, creato da `vercel env pull`):
@@ -18,7 +18,7 @@ import { GatewayUsers } from '../lib/auth.js';
 import { kvConfigFromEnv } from '../lib/config.js';
 import { createKv, systemClock } from '../lib/kv.js';
 
-const DEFAULT_URL = 'https://spookyfy-ten.vercel.app';
+const DEFAULT_URL = 'https://spookyfy-music.vercel.app';
 const base = new URL(process.argv[2] ?? process.env.SPOOKYFY_URL ?? DEFAULT_URL).origin;
 const token = process.env.VERIFY_REGISTRATION_TOKEN || process.env.REGISTRATION_TOKEN || '';
 const skipYoutube = process.env.VERIFY_SKIP_YOUTUBE === '1';
