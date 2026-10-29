@@ -200,6 +200,20 @@ export class Downloads {
     await db.put('downloads', { trackId: track.id, sizeBytes: blob.size, downloadedAt: this.now() });
   }
 
+  /**
+   * La copertina di un brano scaricato è cambiata (copertina assegnata al suo album):
+   * la nuova entra nella cache offline, così player e lockscreen la mostrano anche senza rete.
+   */
+  async refreshCover(track: TrackDto): Promise<void> {
+    if (this.status(track.id) !== 'downloaded') return;
+    const cache = await this.caches.open(OFFLINE_COVER_CACHE);
+    if (await cache.match(absolute(track.coverUrl))) return;
+    try {
+      const cover = await this.fetch(track.coverUrl, { credentials: 'same-origin' });
+      if (cover.ok) await cache.put(absolute(track.coverUrl), cover);
+    } catch {}
+  }
+
   async remove(trackId: string): Promise<void> {
     this.aborts.get(trackId)?.abort();
     const db = await this.deps.db();

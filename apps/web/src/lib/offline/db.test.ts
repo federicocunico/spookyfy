@@ -22,6 +22,7 @@ test('apertura su un database nuovo: tutti gli store e gli indici', async () => 
       'libPlays',
       'imports',
       'settings',
+      'libAlbums',
     ].sort(),
   );
   expect([...db.transaction('downloadQueue').store.indexNames]).toEqual(['byEnqueued']);
@@ -64,7 +65,9 @@ test('migrazione: dall’ultima versione a una successiva i dati restano e la nu
 test('un database a una versione intermedia viene portato all’ultima', async () => {
   const name = uniqueName();
   // Database creato "a mano" alla v1 da un client precedente (stesso schema).
-  const legacy = await openDB(name, 1, { upgrade: (db) => MIGRATIONS[1]!(db as never) });
+  const legacy = await openDB(name, 1, {
+    upgrade: (db, _o, _n, tx) => MIGRATIONS[1]!(db as never, tx as never),
+  });
   legacy.close();
   const db = await openSpookyfyDb(name);
   expect(db.version).toBe(DB_VERSION);
@@ -139,4 +142,59 @@ test('meta tipizzati e pulizia dei dati personali al logout', async () => {
   expect(await getMeta(db, 'user')).toBeUndefined();
   expect(await db.count('downloads')).toBe(1);
   db.close();
+});
+
+test('migrazione v2 → v3: i brani con album vengono raggruppati, gli altri restano senza', async () => {
+  const name = uniqueName();
+  const v2 = await openSpookyfyDb(name, 2);
+  const base = {
+    sourceKey: '',
+    artist: 'Radiohead',
+    durationMs: 1,
+    sizeBytes: 1,
+    mimeType: 'audio/mp4',
+    dominantColor: '#000000',
+  };
+  await v2.put('libTracks', {
+    ...base,
+    id: 'a',
+    sourceKey: 'file:a',
+    title: 'Airbag',
+    album: 'OK Computer',
+    addedAt: 1,
+  });
+  await v2.put('libTracks', {
+    ...base,
+    id: 'b',
+    sourceKey: 'file:b',
+    title: 'Lucky',
+    album: 'ok computer',
+    addedAt: 2,
+  });
+  await v2.put('libTracks', {
+    ...base,
+    id: 'c',
+    sourceKey: 'file:c',
+    title: 'Creep',
+    album: null,
+    addedAt: 3,
+  });
+  v2.close();
+
+  const v3 = await openSpookyfyDb(name, 3);
+  const albums = await v3.getAll('libAlbums');
+  expect(albums).toEqual([
+    expect.objectContaining({
+      title: 'OK Computer',
+      artist: 'Radiohead',
+      origin: 'auto',
+      lookupStatus: 'pending',
+    }),
+  ]);
+  const [a, b, c] = await Promise.all(['a', 'b', 'c'].map((id) => v3.get('libTracks', id)));
+  expect(a).toMatchObject({ albumId: albums[0]!.id, albumPosition: 1, album: 'OK Computer', genres: [] });
+  expect(b).toMatchObject({ albumId: albums[0]!.id, albumPosition: 2, album: 'OK Computer' });
+  expect(c).toMatchObject({ album: null, genres: [] });
+  expect(c?.albumId).toBeUndefined();
+  v3.close();
 });

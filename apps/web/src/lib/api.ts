@@ -1,9 +1,19 @@
 import type {
+  AlbumDto,
+  AlbumSort,
+  AlbumSummaryDto,
   ApiErrorBody,
+  ApplyCandidateBody,
+  CatalogSettingsDto,
+  CreateAlbumBody,
   FavoriteDto,
+  GenreDetailDto,
+  GenreDto,
   IngestResponse,
   JobDto,
   ListTracksQuery,
+  LookupCandidateDto,
+  LookupQuery,
   MeDto,
   Page,
   PlayEvent,
@@ -14,6 +24,7 @@ import type {
   RemoteSearchResultDto,
   SubmitPlaysResult,
   TrackDto,
+  UpdateAlbumBody,
   UpdateTrackBody,
 } from '@spookyfy/shared';
 
@@ -56,11 +67,16 @@ export async function request<T>(
 ): Promise<T> {
   let res: Response;
   try {
+    // Un Blob (es. la copertina di un album) viaggia così com'è, con il suo tipo.
+    const raw = body instanceof Blob;
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers:
+        body === undefined
+          ? undefined
+          : { 'content-type': raw ? body.type || 'application/octet-stream' : 'application/json' },
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       signal: opts.signal,
     });
   } catch (err) {
@@ -135,6 +151,52 @@ export const api = {
         `/api/playlists/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/move`,
         { toIndex },
       ),
+  },
+  albums: {
+    list: (sort?: AlbumSort, query?: string) =>
+      request<{ items: AlbumSummaryDto[] }>('GET', `/api/albums${q({ sort, q: query })}`),
+    get: (id: string) => request<AlbumDto>('GET', `/api/albums/${encodeURIComponent(id)}`),
+    create: (body: CreateAlbumBody) => request<AlbumDto>('POST', '/api/albums', body),
+    update: (id: string, body: UpdateAlbumBody) =>
+      request<AlbumDto>('PATCH', `/api/albums/${encodeURIComponent(id)}`, body),
+    delete: (id: string) => request<void>('DELETE', `/api/albums/${encodeURIComponent(id)}`),
+    addTracks: (id: string, trackIds: string[], toIndex?: number) =>
+      request<AlbumDto>('POST', `/api/albums/${encodeURIComponent(id)}/tracks`, { trackIds, toIndex }),
+    /** undefined se l'album, creato in automatico, è sparito perché rimasto vuoto. */
+    removeTrack: (id: string, trackId: string) =>
+      request<AlbumDto | undefined>(
+        'DELETE',
+        `/api/albums/${encodeURIComponent(id)}/tracks/${encodeURIComponent(trackId)}`,
+      ),
+    moveTrack: (id: string, trackId: string, toIndex: number) =>
+      request<AlbumDto>(
+        'POST',
+        `/api/albums/${encodeURIComponent(id)}/tracks/${encodeURIComponent(trackId)}/move`,
+        { toIndex },
+      ),
+    setCover: (id: string, image: Blob) =>
+      request<AlbumDto>('PUT', `/api/albums/${encodeURIComponent(id)}/cover`, image),
+    removeCover: (id: string) => request<AlbumDto>('DELETE', `/api/albums/${encodeURIComponent(id)}/cover`),
+    updateGenres: (id: string, change: { add?: string[]; remove?: string[] }) =>
+      request<AlbumDto>('POST', `/api/albums/${encodeURIComponent(id)}/genres`, change),
+    applyCandidate: (id: string, body: ApplyCandidateBody) =>
+      request<AlbumDto>('POST', `/api/albums/${encodeURIComponent(id)}/apply-candidate`, body),
+  },
+  genres: {
+    list: () => request<{ items: GenreDto[] }>('GET', '/api/genres'),
+    get: (name: string) => request<GenreDetailDto>('GET', `/api/genres/${encodeURIComponent(name)}`),
+    setForTrack: (trackId: string, genres: string[]) =>
+      request<TrackDto>('PUT', `/api/tracks/${encodeURIComponent(trackId)}/genres`, { genres }),
+  },
+  lookup: {
+    search: (query: LookupQuery, signal?: AbortSignal) =>
+      request<{ items: LookupCandidateDto[] }>('GET', `/api/lookup/albums${q(query)}`, undefined, { signal }),
+    /** Immagine di un candidato dalla stessa origine dell'app (server on-premise o gateway). */
+    imageUrl: (url: string) => `/api/lookup/image${q({ url })}`,
+  },
+  settings: {
+    get: () => request<CatalogSettingsDto>('GET', '/api/settings'),
+    update: (body: { coverLookup: boolean }) => request<CatalogSettingsDto>('PATCH', '/api/settings', body),
   },
   remote: {
     search: (query: string, signal?: AbortSignal) =>

@@ -13,13 +13,17 @@ export interface TrackDto {
   title: string;
   artist: string;
   album: string | null;
+  /** Album del catalogo a cui appartiene il brano (il campo `album` ne riporta il titolo). */
+  albumId: string | null;
+  /** Generi del brano, nella grafia in uso in libreria. */
+  genres: string[];
   durationMs: number;
   /** Auto-trim (vedi silence.ts): la riproduzione parte da qui, saltando il silenzio iniziale. */
   trimStartMs?: number;
   /** Auto-trim: la riproduzione finisce qui, saltando il silenzio finale. */
   trimEndMs?: number;
   sizeBytes: number;
-  /** Colore dominante della copertina, `#rrggbb`. */
+  /** Colore dominante della copertina (quella dell'album, se assegnata), `#rrggbb`. */
   dominantColor: string;
   addedAt: number;
   audioUrl: string;

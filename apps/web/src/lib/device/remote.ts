@@ -1,4 +1,11 @@
-import type { ApiErrorBody, IngestResponse, JobDto, RemoteSearchResultDto, TrackDto } from '@spookyfy/shared';
+import type {
+  ApiErrorBody,
+  IngestResponse,
+  JobDto,
+  LookupCandidateDto,
+  RemoteSearchResultDto,
+  TrackDto,
+} from '@spookyfy/shared';
 import { ApiError, request } from '../api';
 
 /** Metadati di un video restituiti dal gateway (`/api/meta/:id`). */
@@ -71,6 +78,21 @@ export class GatewayClient {
 
   meta(sourceId: string) {
     return request<GatewayMeta>('GET', `/api/meta/${encodeURIComponent(sourceId)}`);
+  }
+
+  /** Candidati per un album dai database musicali (ricerca online del gateway). */
+  lookupAlbums(query: { album?: string; artist?: string; title?: string }, signal?: AbortSignal) {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v) p.set(k, v);
+    return request<{ items: LookupCandidateDto[] }>('GET', `/api/lookup/albums?${p}`, undefined, { signal });
+  }
+
+  /** Immagine di un candidato, scaricata dalla stessa origine tramite il gateway. */
+  lookupImage(url: string, signal?: AbortSignal): Promise<Blob> {
+    return fetchBlob(this.fetchImpl, `/api/lookup/image?url=${encodeURIComponent(url)}`, {
+      credentials: 'same-origin',
+      signal,
+    });
   }
 
   audioUrl(sourceId: string) {

@@ -11,7 +11,8 @@
     "api/search.ts": { "maxDuration": 20 },
     "api/meta/[id].ts": { "maxDuration": 20 },
     "api/audio/[id].ts": { "maxDuration": 300 },
-    "api/cover/[id].ts": { "maxDuration": 15 }
+    "api/cover/[id].ts": { "maxDuration": 15 },
+    "api/lookup/[action].ts": { "maxDuration": 20 }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "headers": [

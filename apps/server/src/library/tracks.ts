@@ -4,6 +4,7 @@ import {
   type Page,
   type TrackDto,
   type UpdateTrackBody,
+  albumCoverUrl,
   trackAudioUrl,
   trackCoverUrl,
 } from '@spookyfy/shared';
@@ -12,6 +13,7 @@ import type Database from 'better-sqlite3';
 import { HttpError, notFound } from '../http-errors.js';
 import { COVER_SIZES, absMediaPath, coverRelPath } from '../media/paths.js';
 import { updateTextTags } from '../media/tags.js';
+import type { AlbumService } from './albums.js';
 
 export interface TrackRow {
   id: string;
@@ -27,6 +29,12 @@ export interface TrackRow {
   audio_path: string;
   cover_path: string;
   added_at: number;
+  album_id: string | null;
+  /** Versione della copertina assegnata all'album del brano (NULL se non ce n'è una). */
+  album_cover_version: number | null;
+  album_cover_color: string | null;
+  /** Generi del brano come array JSON. */
+  genres_json: string;
   is_favorite: number;
   play_count: number;
   last_played_at: number | null;
@@ -36,27 +44,37 @@ export interface TrackRow {
 export const TRACK_SELECT = `
   t.id, t.source_id, t.title, t.artist, t.album, t.duration_ms, t.trim_start_ms, t.trim_end_ms,
   t.size_bytes, t.dominant_color,
-  t.audio_path, t.cover_path, t.added_at,
+  t.audio_path, t.cover_path, t.added_at, t.album_id,
+  (SELECT a.cover_version FROM albums a WHERE a.id = t.album_id AND a.cover_path IS NOT NULL) AS album_cover_version,
+  (SELECT a.cover_color FROM albums a WHERE a.id = t.album_id AND a.cover_path IS NOT NULL) AS album_cover_color,
+  (SELECT json_group_array(name) FROM (SELECT g.name FROM track_genres tg JOIN genres g ON g.id = tg.genre_id
+     WHERE tg.track_id = t.id ORDER BY g.name COLLATE NOCASE)) AS genres_json,
   EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = @userId AND f.track_id = t.id) AS is_favorite,
   (SELECT count(*) FROM plays p WHERE p.user_id = @userId AND p.track_id = t.id) AS play_count,
   (SELECT max(p.played_at) FROM plays p WHERE p.user_id = @userId AND p.track_id = t.id) AS last_played_at`;
 
 export function toTrackDto(r: TrackRow): TrackDto {
+  // Una copertina assegnata all'album prende il posto di quella del brano (liste, player, sistema).
+  const albumCover = r.album_id && r.album_cover_version !== null ? r.album_id : null;
   return {
     id: r.id,
     sourceId: r.source_id,
     title: r.title,
     artist: r.artist,
     album: r.album,
+    albumId: r.album_id,
+    genres: JSON.parse(r.genres_json) as string[],
     durationMs: r.duration_ms,
     ...(r.trim_start_ms ? { trimStartMs: r.trim_start_ms } : {}),
     ...(r.trim_end_ms ? { trimEndMs: r.trim_end_ms } : {}),
     sizeBytes: r.size_bytes,
-    dominantColor: r.dominant_color,
+    dominantColor: (albumCover && r.album_cover_color) || r.dominant_color,
     addedAt: r.added_at,
     audioUrl: trackAudioUrl(r.id),
-    coverUrl: trackCoverUrl(r.id, 512),
-    coverThumbUrl: trackCoverUrl(r.id, 128),
+    coverUrl: albumCover ? albumCoverUrl(albumCover, 512, r.album_cover_version!) : trackCoverUrl(r.id, 512),
+    coverThumbUrl: albumCover
+      ? albumCoverUrl(albumCover, 128, r.album_cover_version!)
+      : trackCoverUrl(r.id, 128),
     isFavorite: r.is_favorite === 1,
     playCount: r.play_count,
     lastPlayedAt: r.last_played_at,
@@ -104,6 +122,7 @@ export class TrackService {
   constructor(
     private readonly sqlite: Database.Database,
     private readonly mediaDir: string,
+    private readonly albums?: AlbumService,
   ) {}
 
   getRow(userId: string, id: string): TrackRow | undefined {
@@ -152,7 +171,7 @@ export class TrackService {
           `SELECT ${TRACK_SELECT} FROM tracks_fts
            JOIN tracks t ON t.id = tracks_fts.track_id
            WHERE tracks_fts MATCH @match
-           ORDER BY bm25(tracks_fts, 0, 10.0, 5.0, 1.0), t.added_at DESC
+           ORDER BY bm25(tracks_fts, 0, 10.0, 5.0, 1.0, 1.0), t.added_at DESC
            LIMIT @limit OFFSET @offset`,
         )
         .all({ userId, match, limit: limit + 1, offset }) as TrackRow[];
@@ -206,6 +225,8 @@ export class TrackService {
         'UPDATE tracks SET title = @title, artist = @artist, album = @album, size_bytes = @size WHERE id = @id',
       )
       .run({ ...next, size, id });
+    // Il campo album sposta il brano nell'album con quel titolo (creato se manca).
+    if (patch.album !== undefined) this.albums?.moveByTitle(id, next.album);
     return this.get(userId, id);
   }
 
@@ -216,6 +237,7 @@ export class TrackService {
       | undefined;
     if (!row) throw notFound('Brano non trovato');
     this.sqlite.prepare('DELETE FROM tracks WHERE id = ?').run(id);
+    this.albums?.pruneEmptyAuto();
     const files = [row.audio_path, ...COVER_SIZES.map((s) => coverRelPath(row.cover_path, s))];
     await Promise.all(files.map((f) => fs.rm(absMediaPath(this.mediaDir, f), { force: true })));
   }

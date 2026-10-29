@@ -1,6 +1,7 @@
 <script lang="ts">
-import type { TrackDto } from '@spookyfy/shared';
+import type { AlbumSort, TrackDto } from '@spookyfy/shared';
 import { untrack } from 'svelte';
+import Cover from '../components/Cover.svelte';
 import DeviceNotices from '../components/DeviceNotices.svelte';
 import Icon from '../components/Icon.svelte';
 import ImportFilesButton from '../components/ImportFilesButton.svelte';
@@ -8,10 +9,14 @@ import PlaylistCover from '../components/PlaylistCover.svelte';
 import Skeleton from '../components/Skeleton.svelte';
 import TrackRow from '../components/TrackRow.svelte';
 import { formatLongDuration, pluralize } from '../lib/format';
+import { genreColor } from '../lib/genre-color';
 import { pathOf } from '../lib/router.svelte';
 import { services } from '../lib/services.svelte';
 
-const { library, router, ui, toasts, api, player, downloads, connection, mode } = services();
+/** Categoria mostrata: playlist (con tutti i brani), album o generi. */
+let { view = 'playlists' }: { view?: 'playlists' | 'albums' | 'genres' } = $props();
+
+const { library, catalog, router, ui, toasts, api, player, downloads, connection, mode } = services();
 // In modalità client la libreria è sul dispositivo: nuove playlist anche offline.
 const needsNetwork = mode === 'onpremise';
 
@@ -24,11 +29,43 @@ let sentinel: HTMLElement | undefined = $state();
 // caricamenti (cursore, loadingMore) riattivi l'effetto in un ciclo infinito.
 $effect(() => {
   untrack(() => {
+    if (view === 'albums') {
+      void catalog.loadAlbums().catch(() => {
+        catalog.albums ??= [];
+      });
+      return;
+    }
+    if (view === 'genres') {
+      void catalog.loadGenres().catch(() => {
+        catalog.genres ??= [];
+      });
+      return;
+    }
     void library.loadPlaylists().catch(() => {});
     void library.loadFavorites().catch(() => {});
     void loadMore(true);
   });
 });
+
+const SORTS: { value: AlbumSort; label: string }[] = [
+  { value: 'added', label: 'Aggiunti di recente' },
+  { value: 'title', label: 'Titolo' },
+  { value: 'artist', label: 'Artista' },
+];
+
+function newAlbum() {
+  ui.prompt = {
+    title: 'Nuovo album',
+    label: 'Titolo dell’album',
+    value: '',
+    confirmLabel: 'Crea',
+    submit: async (title) => {
+      const a = await catalog.createAlbum({ title });
+      toasts.show(`Album «${a.title}» creato`);
+      router.navigate(pathOf.album(a.id));
+    },
+  };
+}
 
 async function loadMore(reset = false) {
   if (loadingMore || (!reset && !cursor)) return;
@@ -92,8 +129,8 @@ function go(e: MouseEvent, path: string) {
       {#if mode === 'client'}<ImportFilesButton variant="icon" />{/if}
       <button
         class="icon-btn"
-        aria-label="Nuova playlist"
-        onclick={newPlaylist}
+        aria-label={view === 'albums' ? 'Nuovo album' : 'Nuova playlist'}
+        onclick={view === 'albums' ? newAlbum : newPlaylist}
         disabled={needsNetwork && connection.offline}
       >
         <Icon name="plus" />
@@ -104,17 +141,74 @@ function go(e: MouseEvent, path: string) {
     </div>
   </header>
 
-  {#if mode === 'client'}
-    <DeviceNotices />
-  {:else}
-    <nav class="chips" aria-label="Filtri">
-      <a class="chip" aria-current="page" href={pathOf.library()} onclick={(e) => go(e, pathOf.library())}>Playlist</a>
+  {#if mode === 'client'}<DeviceNotices />{/if}
+  <nav class="chips" aria-label="Filtri">
+    <a class="chip" aria-current={view === 'playlists' ? 'page' : undefined} href={pathOf.library()} onclick={(e) => go(e, pathOf.library())}>Playlist</a>
+    <a class="chip" aria-current={view === 'albums' ? 'page' : undefined} href={pathOf.albums()} onclick={(e) => go(e, pathOf.albums())}>Album</a>
+    <a class="chip" aria-current={view === 'genres' ? 'page' : undefined} href={pathOf.genres()} onclick={(e) => go(e, pathOf.genres())}>Generi</a>
+    {#if mode === 'onpremise'}
       <a class="chip" href={pathOf.downloaded()} onclick={(e) => go(e, pathOf.downloaded())}>
         Scaricati{downloads.downloadedCount > 0 ? ` · ${downloads.downloadedCount}` : ''}
       </a>
-    </nav>
-  {/if}
+    {/if}
+  </nav>
 
+  {#if view === 'albums'}
+    {#if catalog.albums === null}
+      <Skeleton rows={4} />
+    {:else if catalog.albums.length === 0}
+      <p class="empty-state">
+        Nessun album. I brani con l’album nei tag vengono raggruppati da soli; puoi crearne uno con + e
+        aggiungere brani dal menu ⋯ di ogni brano.
+      </p>
+    {:else}
+      <label class="sort">
+        <span class="muted">Ordina per</span>
+        <select
+          value={catalog.albumSort}
+          onchange={(e) => void catalog.loadAlbums(e.currentTarget.value as AlbumSort).catch(() => {})}
+        >
+          {#each SORTS as s (s.value)}<option value={s.value}>{s.label}</option>{/each}
+        </select>
+      </label>
+      <ul class="albums">
+        {#each catalog.albums as a (a.id)}
+          <li>
+            <a class="album" href={pathOf.album(a.id)} onclick={(e) => go(e, pathOf.album(a.id))}>
+              <Cover src={a.coverUrl} color={a.dominantColor} alt="" />
+              <span class="name ellipsis">{a.title}</span>
+              <span class="muted sub ellipsis">{a.artist}{a.year ? ` · ${a.year}` : ''}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  {:else if view === 'genres'}
+    {#if catalog.genres === null}
+      <Skeleton rows={4} />
+    {:else if catalog.genres.length === 0}
+      <p class="empty-state">
+        Nessun genere. Aggiungili dal menu ⋯ di un brano («Generi…») o dalla pagina di un album; quelli nei tag
+        dei file vengono importati da soli.
+      </p>
+    {:else}
+      <ul class="genres">
+        {#each catalog.genres as g (g.name)}
+          <li>
+            <a
+              class="genre"
+              href={pathOf.genre(g.name)}
+              style:background={genreColor(g.name)}
+              onclick={(e) => go(e, pathOf.genre(g.name))}
+            >
+              <span class="name">{g.name}</span>
+              <span class="count">{pluralize(g.trackCount, 'brano', 'brani')}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  {:else}
   <ul class="list">
     <li>
       <a class="entry" href={pathOf.favorites()} onclick={(e) => go(e, pathOf.favorites())}>
@@ -159,6 +253,7 @@ function go(e: MouseEvent, path: string) {
       <div bind:this={sentinel}><Skeleton rows={2} /></div>
     {/if}
   {/if}
+  {/if}
 </div>
 
 <style>
@@ -184,6 +279,61 @@ function go(e: MouseEvent, path: string) {
     background: var(--surface-3);
     font-size: var(--fs-s);
     font-weight: 600;
+  }
+  .sort {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+    font-size: var(--fs-s);
+  }
+  .sort select {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-s);
+    padding: var(--space-1) var(--space-2);
+    min-height: 36px;
+  }
+  .albums,
+  .genres {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+  }
+  .albums {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-4) var(--space-3);
+  }
+  .album {
+    display: grid;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+  .album:active,
+  .genre:active {
+    opacity: 0.7;
+  }
+  .genres {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--space-3);
+  }
+  .genre {
+    display: grid;
+    align-content: space-between;
+    min-height: 88px;
+    padding: var(--space-3);
+    border-radius: var(--radius-s);
+    color: #fff;
+  }
+  .genre .name {
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+  .genre .count {
+    font-size: var(--fs-s);
+    opacity: 0.9;
   }
   .chip[aria-current='page'] {
     background: var(--accent);

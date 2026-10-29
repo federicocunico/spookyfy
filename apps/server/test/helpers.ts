@@ -12,6 +12,11 @@ import { fakeYtDlp } from './fixtures/fake-ytdlp.js';
 
 export const TEST_ORIGIN = 'https://spookyfy.test';
 
+/** fetch che fallisce sempre, come senza connessione. */
+export const offlineFetch = (async () => {
+  throw new TypeError('fetch failed');
+}) as unknown as typeof fetch;
+
 export class FakeClock implements Clock {
   constructor(public t = Date.UTC(2026, 0, 1)) {}
   now(): number {
@@ -88,6 +93,7 @@ export function apiClient(ctx: TestContext, cookie: string) {
       headers: { cookie, origin: TEST_ORIGIN, ...o.headers },
     });
   return {
+    cookie,
     get: (url: string, headers?: Record<string, string>) => call('GET', { url, headers }),
     post: (url: string, payload?: unknown) => call('POST', { url, payload }),
     put: (url: string, payload?: unknown) => call('PUT', { url, payload }),
@@ -135,6 +141,8 @@ export async function createTestContext(opts: TestContextOptions = {}): Promise<
     ytdlp: fakeYtDlp(),
     // Auto-trim spento: senza, con ffmpeg installato ogni test lo eseguirebbe in background.
     analyzeSilence: null,
+    // Nessuna rete nei test: la ricerca automatica di copertine fallisce e si sospende.
+    lookupFetch: offlineFetch,
     hardware: { cores: 4, totalMemBytes: 4 * 1024 ** 3, arch: 'arm64', platform: 'linux', ...opts.hardware },
     ...opts.buildOptions,
   });

@@ -1,4 +1,4 @@
-import type { TrackDto } from '@spookyfy/shared';
+import { type TrackDto, splitGenres } from '@spookyfy/shared';
 import type { CoverProcessor } from './cover';
 import type { DeviceLibrary } from './library';
 
@@ -15,6 +15,11 @@ export interface FileTags {
   title?: string;
   artist?: string;
   album?: string;
+  /** Artista dell'album (TPE2 / aART): raggruppa le raccolte con più artisti. */
+  albumArtist?: string;
+  /** Numero di traccia: posizione nell'album. */
+  trackNo?: number;
+  genres?: string[];
   durationSec?: number;
   picture?: { data: Uint8Array; format: string };
 }
@@ -30,6 +35,9 @@ export const readTags: TagReader = async (bytes, mimeType) => {
     title: m.common.title,
     artist: m.common.artist ?? m.common.albumartist,
     album: m.common.album,
+    albumArtist: m.common.albumartist,
+    trackNo: m.common.track?.no ?? undefined,
+    genres: m.common.genre,
     durationSec: m.format.duration,
     picture: pic ? { data: pic.data, format: pic.format } : undefined,
   };
@@ -105,6 +113,7 @@ export async function importFiles(files: File[], d: FileImportDeps): Promise<Imp
         title: tags.title?.trim() || titleFromName(file.name),
         artist: tags.artist?.trim() || UNKNOWN_ARTIST,
         album: tags.album?.trim() || null,
+        genres: splitGenres(tags.genres),
         durationMs: Math.round((tags.durationSec ?? 0) * 1000),
         sizeBytes: file.size,
         mimeType,
@@ -113,6 +122,8 @@ export async function importFiles(files: File[], d: FileImportDeps): Promise<Imp
       audio: file,
       cover512: cover.large,
       cover128: cover.thumb,
+      albumArtist: tags.albumArtist,
+      trackNo: tags.trackNo,
     });
     out.push({ file: file.name, status: 'imported', track });
   }

@@ -1,6 +1,6 @@
 import type { TrackDto } from '@spookyfy/shared';
 import { type TestServices, audioResponse, flush, makeTrack, setupServices } from '../../test/fixtures';
-import { AUDIO_CACHE, Downloads } from './downloads.svelte';
+import { AUDIO_CACHE, Downloads, OFFLINE_COVER_CACHE } from './downloads.svelte';
 import { StorageStatus } from './storage.svelte';
 import { WakeLockController } from './wakelock';
 
@@ -355,4 +355,21 @@ describe('salvataggio offline automatico dopo l’importazione', () => {
     });
     expect(download).not.toHaveBeenCalled();
   });
+});
+
+test('copertina dell’album assegnata a un brano scaricato: entra nella cache offline', async () => {
+  const fetchImpl = fetchOk();
+  const { d } = makeDownloads(fetchImpl);
+  const t = makeTrack();
+  await d.download(t);
+  const withAlbumCover = { ...t, albumId: 'a1', coverUrl: '/api/albums/a1/cover?size=512&v=1' };
+  await d.refreshCover(withAlbumCover);
+  const covers = await caches.open(OFFLINE_COVER_CACHE);
+  expect(await covers.match(new URL(withAlbumCover.coverUrl, location.href).href)).toBeTruthy();
+  // Un brano non scaricato non riempie la cache.
+  const other = makeTrack();
+  await d.refreshCover({ ...other, coverUrl: '/api/albums/a2/cover?size=512&v=1' });
+  expect(
+    await covers.match(new URL('/api/albums/a2/cover?size=512&v=1', location.href).href),
+  ).toBeUndefined();
 });

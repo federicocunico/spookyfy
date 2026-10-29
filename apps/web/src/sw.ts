@@ -26,7 +26,8 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), { deny
 
 const sameOrigin = (url: URL) => url.origin === self.location.origin;
 const AUDIO_PATH = /^\/api\/tracks\/[^/]+\/audio$/;
-const COVER_PATH = /^\/api\/tracks\/[^/]+\/cover$/;
+// Copertine dei brani e quelle assegnate agli album (mostrate anche dai brani dell'album).
+const COVER_PATH = /^\/api\/(tracks|albums)\/[^/]+\/cover$/;
 
 /**
  * Audio: se il brano è scaricato lo si serve dalla cache, ritagliando le

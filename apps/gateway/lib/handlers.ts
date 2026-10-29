@@ -52,6 +52,7 @@ export function handleHealth(d: GatewayDeps): Response {
       Feature.RemoteSearch,
       Feature.DeviceIngest,
       ...(d.config.registrationToken ? [Feature.Registration] : []),
+      ...(d.config.coverLookupForcedOff ? [] : [Feature.CoverLookup]),
     ],
   };
   return json(200, body);

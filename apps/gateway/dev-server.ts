@@ -22,6 +22,7 @@ import {
 } from './lib/handlers.js';
 import { handle } from './lib/http.js';
 import { type Clock, type Kv, MemoryKv, systemClock } from './lib/kv.js';
+import { handleLookup } from './lib/lookup.js';
 import { FakeYoutube, fakeAudioOrigin } from './lib/youtube-fake.js';
 import { InnertubeYoutube } from './lib/youtube-innertube.js';
 import type { YoutubeClient } from './lib/youtube.js';
@@ -140,6 +141,7 @@ export async function startDevServer(
     [/^\/api\/meta\/([^/]+)$/, (req, m) => handleMeta(req, decodeURIComponent(m[1]!), deps)],
     [/^\/api\/audio\/([^/]+)$/, (req, m) => handleAudio(req, decodeURIComponent(m[1]!), deps)],
     [/^\/api\/cover\/([^/]+)$/, (req, m) => handleCover(req, decodeURIComponent(m[1]!), deps)],
+    [/^\/api\/lookup\/([^/]+)$/, (req, m) => handleLookup(req, m[1]!, deps)],
     [/^\/__fake-audio\/([^/]+)$/, async (req) => fakeAudioOrigin(req)],
   ];
 

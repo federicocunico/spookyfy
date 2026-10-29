@@ -150,6 +150,11 @@ export class Library {
     for (const l of this.trackListeners) l(track);
   }
 
+  /** Brani modificati altrove (album, copertina, generi): aggiorna liste e player. */
+  tracksChanged(tracks: TrackDto[]): void {
+    for (const t of tracks) this.emitChanged(t);
+  }
+
   async setFavorite(track: TrackDto, favorite: boolean): Promise<void> {
     const before = this.favorites;
     const updated = { ...track, isFavorite: favorite };

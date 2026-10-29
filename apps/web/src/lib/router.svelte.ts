@@ -3,6 +3,10 @@ export type RouteName =
   | 'search'
   | 'library'
   | 'downloaded'
+  | 'albums'
+  | 'genres'
+  | 'album'
+  | 'genre'
   | 'playlist'
   | 'favorites'
   | 'settings'
@@ -24,6 +28,10 @@ const TABLE: [RouteName, RegExp][] = [
   ['search', /^\/search$/],
   ['library', /^\/library$/],
   ['downloaded', /^\/library\/downloaded$/],
+  ['albums', /^\/library\/albums$/],
+  ['genres', /^\/library\/genres$/],
+  ['album', /^\/album\/(?<id>[^/]+)$/],
+  ['genre', /^\/genre\/(?<name>[^/]+)$/],
   ['favorites', /^\/favorites$/],
   ['playlist', /^\/playlist\/(?<id>[^/]+)$/],
   ['settings', /^\/settings$/],
@@ -53,6 +61,10 @@ export const pathOf = {
   search: () => '/search',
   library: () => '/library',
   downloaded: () => '/library/downloaded',
+  albums: () => '/library/albums',
+  genres: () => '/library/genres',
+  album: (id: string) => `/album/${encodeURIComponent(id)}`,
+  genre: (name: string) => `/genre/${encodeURIComponent(name)}`,
   favorites: () => '/favorites',
   playlist: (id: string) => `/playlist/${encodeURIComponent(id)}`,
   settings: () => '/settings',

@@ -1,18 +1,21 @@
 <script lang="ts">
-import { ErrorCode, type RemoteSearchResultDto, type TrackDto } from '@spookyfy/shared';
+import { type AlbumSummaryDto, ErrorCode, type RemoteSearchResultDto, type TrackDto } from '@spookyfy/shared';
+import Cover from '../components/Cover.svelte';
 import Icon from '../components/Icon.svelte';
 import ImportFilesButton from '../components/ImportFilesButton.svelte';
 import RemoteResult from '../components/RemoteResult.svelte';
 import TrackRow from '../components/TrackRow.svelte';
 import { ApiError } from '../lib/api';
 import { searchViaBridge } from '../lib/device/backend';
+import { pathOf } from '../lib/router.svelte';
 import { services } from '../lib/services.svelte';
 
 const LOCAL_DEBOUNCE_MS = 200;
-const { api, player, connection, mode, device } = services();
+const { api, player, connection, mode, device, router } = services();
 
 let query = $state('');
 let local = $state<TrackDto[] | null>(null);
+let localAlbums = $state<AlbumSummaryDto[]>([]);
 let remote = $state<RemoteSearchResultDto[] | null>(null);
 let remoteError = $state<string | null>(null);
 let remoteLoading = $state(false);
@@ -34,6 +37,7 @@ $effect(() => {
   const q = query.trim();
   if (!q) {
     local = null;
+    localAlbums = [];
     return;
   }
   const ac = new AbortController();
@@ -43,6 +47,9 @@ $effect(() => {
     } catch (err) {
       if ((err as Error).name !== 'AbortError') local = [];
     }
+    // Album per titolo o artista (solo quelli: i brani sono già sopra).
+    const albums = await api.albums.list('title', q).catch(() => ({ items: [] }));
+    if (!ac.signal.aborted) localAlbums = albums.items.slice(0, 10);
   }, LOCAL_DEBOUNCE_MS);
   return () => {
     clearTimeout(timer);
@@ -103,6 +110,27 @@ async function searchBridge() {
       bind:value={query}
     />
   </form>
+
+  {#if localAlbums.length > 0}
+    <h2 class="section-title">Album</h2>
+    <ul class="albums" aria-label="Album trovati">
+      {#each localAlbums as a (a.id)}
+        <li>
+          <a
+            href={pathOf.album(a.id)}
+            onclick={(e) => {
+              e.preventDefault();
+              router.navigate(pathOf.album(a.id));
+            }}
+          >
+            <Cover src={a.coverThumbUrl} color={a.dominantColor} alt="" />
+            <span class="name ellipsis">{a.title}</span>
+            <span class="muted sub ellipsis">{a.artist}</span>
+          </a>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 
   {#if local && local.length > 0}
     <h2 class="section-title">Nella tua libreria</h2>
@@ -183,5 +211,26 @@ async function searchBridge() {
   }
   .retry {
     margin-top: var(--space-3);
+  }
+  .albums {
+    list-style: none;
+    margin: 0 0 var(--space-4);
+    padding: 0;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 120px;
+    gap: var(--space-3);
+    overflow-x: auto;
+  }
+  .albums a {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .albums .name {
+    font-weight: 600;
+  }
+  .albums .sub {
+    font-size: var(--fs-s);
   }
 </style>

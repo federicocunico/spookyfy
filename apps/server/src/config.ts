@@ -53,6 +53,14 @@ const envSchema = z
             .transform((o) => new URL(o).origin),
         ),
       ),
+    /** `off` forza spenta la ricerca online di copertine (nessuna chiamata esterna dal server). */
+    COVER_LOOKUP: z.enum(['on', 'off']).default('on'),
+    /** URL di base dei database musicali (sostituiti negli e2e con servizi finti). */
+    LOOKUP_MUSICBRAINZ_URL: z.string().url().optional(),
+    LOOKUP_COVERART_URL: z.string().url().optional(),
+    LOOKUP_ITUNES_URL: z.string().url().optional(),
+    /** Host (o origini complete) da cui si accettano immagini di copertina, separati da virgola. */
+    LOOKUP_IMAGE_HOSTS: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && !env.PUBLIC_ORIGIN) {
@@ -85,6 +93,15 @@ export interface Config {
   registrationToken: string;
   /** Vuoto = ponte disabilitato. */
   bridgeAllowedOrigins: string[];
+  /** Ricerca online di copertine forzata spenta (`COVER_LOOKUP=off`). */
+  coverLookupForcedOff: boolean;
+  lookup: {
+    musicbrainzUrl?: string;
+    coverArtUrl?: string;
+    itunesUrl?: string;
+    /** Vuoto = host predefiniti (Cover Art Archive, archive.org, iTunes). */
+    imageHosts?: string[];
+  };
   version: string;
 }
 
@@ -136,6 +153,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     cookieSecure: e.COOKIE_SECURE,
     registrationToken: e.REGISTRATION_TOKEN,
     bridgeAllowedOrigins: e.BRIDGE_ALLOWED_ORIGINS,
+    coverLookupForcedOff: e.COVER_LOOKUP === 'off',
+    lookup: {
+      musicbrainzUrl: e.LOOKUP_MUSICBRAINZ_URL,
+      coverArtUrl: e.LOOKUP_COVERART_URL,
+      itunesUrl: e.LOOKUP_ITUNES_URL,
+      imageHosts: e.LOOKUP_IMAGE_HOSTS?.split(',')
+        .map((h) => h.trim())
+        .filter(Boolean),
+    },
     version: packageVersion(),
   };
 }

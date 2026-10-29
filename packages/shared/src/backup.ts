@@ -20,6 +20,8 @@ export const backupTrackSchema = z.object({
   trimStartMs: z.number().int().nonnegative().optional(),
   trimEndMs: z.number().int().nonnegative().optional(),
   silenceChecked: z.boolean().optional(),
+  /** Generi del brano (assenti nei backup precedenti agli album). */
+  genres: z.array(z.string().min(1).max(40)).max(10).optional(),
   sizeBytes: z.number().int().nonnegative(),
   mimeType: z.string().min(1).max(100),
   dominantColor: z.string().regex(/^#[0-9a-f]{6}$/i),
@@ -30,6 +32,27 @@ export const backupTrackSchema = z.object({
   audioPart: z.number().int().positive().nullable(),
 });
 export type BackupTrack = z.infer<typeof backupTrackSchema>;
+
+export const backupAlbumSchema = z.object({
+  id: z.string().min(1).max(64),
+  title: z.string().min(1).max(200),
+  artist: z.string().min(1).max(300),
+  year: z.number().int().nullable(),
+  origin: z.enum(['auto', 'manual']),
+  /** Ricerca automatica della copertina già eseguita. */
+  lookupDone: z.boolean(),
+  /** Percorso della copertina assegnata nello ZIP dei metadati, o null. */
+  cover: z.string().max(200).nullable(),
+  coverColor: z
+    .string()
+    .regex(/^#[0-9a-f]{6}$/i)
+    .nullable(),
+  addedAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+  /** Id dei brani nell'ordine dell'album. */
+  trackIds: z.array(z.string()),
+});
+export type BackupAlbum = z.infer<typeof backupAlbumSchema>;
 
 export const backupLibrarySchema = z.object({
   tracks: z.array(backupTrackSchema),
@@ -47,6 +70,8 @@ export const backupLibrarySchema = z.object({
   plays: z.array(
     z.object({ id: z.string().min(1).max(64), trackId: z.string(), playedAt: z.number().int() }),
   ),
+  /** Album (assenti nei backup precedenti: i brani si raggruppano dal campo album). */
+  albums: z.array(backupAlbumSchema).optional(),
 });
 export type BackupLibrary = z.infer<typeof backupLibrarySchema>;
 
@@ -62,6 +87,7 @@ export const backupManifestSchema = z.object({
     playlists: z.number().int().nonnegative(),
     favorites: z.number().int().nonnegative(),
     plays: z.number().int().nonnegative(),
+    albums: z.number().int().nonnegative().optional(),
   }),
   /** Hash di `library.json`: rileva file troncati o modificati. */
   librarySha256: sha256,

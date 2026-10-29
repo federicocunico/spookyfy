@@ -12,6 +12,8 @@ export const Feature = {
   DeviceIngest: 'device-ingest',
   /** Token di accesso personali per il ponte da un'app in modalità client. */
   BridgeTokens: 'bridge-tokens',
+  /** Ricerca online di copertine e metadati degli album. */
+  CoverLookup: 'cover-lookup',
   /** Registrazione dall'app con token di invito. */
   Registration: 'registration',
 } as const;

@@ -16,6 +16,12 @@ export const ErrorCode = {
   VideoUnavailable: 'VIDEO_UNAVAILABLE',
   VideoTooLong: 'VIDEO_TOO_LONG',
   InsufficientStorage: 'INSUFFICIENT_STORAGE',
+  /** Ricerca online di copertine spenta dalle impostazioni. */
+  LookupDisabled: 'LOOKUP_DISABLED',
+  /** Database musicali non raggiungibili. */
+  LookupUnavailable: 'LOOKUP_UNAVAILABLE',
+  /** File non riconosciuto come immagine, o troppo grande. */
+  InvalidImage: 'INVALID_IMAGE',
   Internal: 'INTERNAL',
 } as const;
 

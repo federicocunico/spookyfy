@@ -1,7 +1,7 @@
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
-import { Feature, type HealthDto } from '@spookyfy/shared';
+import { Feature, type HealthDto, createAlbumLookup, fetchCoverImage } from '@spookyfy/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { registerBridgeCors } from './auth/bridge.js';
 import { registerAuth } from './auth/plugin.js';
@@ -18,11 +18,16 @@ import { IngestEvents } from './ingest/events.js';
 import { registerIngestRoutes } from './ingest/routes.js';
 import { IngestService } from './ingest/service.js';
 import { type YtDlp, createYtDlp } from './ingest/ytdlp.js';
+import { AlbumService } from './library/albums.js';
+import { registerCatalogRoutes } from './library/catalog-routes.js';
+import { GenreService } from './library/genres.js';
 import { FavoriteService, PlayService, PlaylistService } from './library/personal.js';
 import { type LibraryServices, registerLibraryRoutes } from './library/routes.js';
 import { TrackService } from './library/tracks.js';
+import { CoverLookupService, SettingsService } from './lookup/service.js';
 import { registerMediaRoutes } from './media/routes.js';
 import { type SilenceAnalyzer, createSilenceAnalyzer } from './media/silence.js';
+import { TagWriter } from './media/tag-writer.js';
 import { registerWeb } from './web.js';
 
 export interface BuildAppOptions {
@@ -35,6 +40,8 @@ export interface BuildAppOptions {
   ytdlp?: YtDlp;
   /** Auto-trim: analizzatore del silenzio (null = disattivato; predefinito: ffmpeg). */
   analyzeSilence?: SilenceAnalyzer | null;
+  /** fetch per i database musicali e le immagini delle copertine (nei test, simulato). */
+  lookupFetch?: typeof fetch;
   /** false per non avviare il worker di ingestione su ready(). */
   startIngestWorker?: boolean;
 }
@@ -51,6 +58,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     ctx: AppContext;
     ingest: IngestService;
+    catalog: { albums: AlbumService; lookup: CoverLookupService; tagWriter: TagWriter };
   }
 }
 
@@ -90,14 +98,47 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerAuth(app, ctx, { users, sessions, tokens });
   registerTokenRoutes(app, tokens);
 
+  const tagWriter = new TagWriter(database.sqlite, config.mediaDir, app.log);
+  const albums = new AlbumService({
+    sqlite: database.sqlite,
+    mediaDir: config.mediaDir,
+    clock: ctx.clock,
+    onTracksChanged: (ids) => tagWriter.enqueue(ids),
+    // La ricerca online è creata più sotto: il riferimento passa dal decoratore.
+    onAlbumCreated: () => app.catalog?.lookup.kick(),
+  });
   const library: LibraryServices = {
-    tracks: new TrackService(database.sqlite, config.mediaDir),
+    tracks: new TrackService(database.sqlite, config.mediaDir, albums),
     favorites: new FavoriteService(database.sqlite, ctx.clock),
     playlists: new PlaylistService(database.sqlite, ctx.clock),
     plays: new PlayService(database.sqlite, ctx.clock),
   };
   registerLibraryRoutes(app, library);
   registerMediaRoutes(app, database.sqlite, config.mediaDir);
+
+  const genres = new GenreService(database.sqlite, albums, (ids) => tagWriter.enqueue(ids));
+  const settings = new SettingsService(database.sqlite, config.coverLookupForcedOff);
+  const lookupFetch = opts.lookupFetch ?? fetch;
+  const userAgent = `Spookyfy/${config.version} ( https://github.com/federicocunico/spookyfy )`;
+  const coverLookup = new CoverLookupService({
+    albums,
+    genres,
+    settings,
+    lookup: createAlbumLookup({ fetch: lookupFetch, userAgent, ...config.lookup }),
+    fetchImage: (url, signal) =>
+      fetchCoverImage(url, {
+        fetch: lookupFetch,
+        hosts: config.lookup.imageHosts?.length ? config.lookup.imageHosts : undefined,
+        userAgent,
+        signal,
+      }),
+    log: app.log,
+  });
+  // Brani importati prima degli album: raggruppati una sola volta.
+  const grouped = albums.groupExistingTracks();
+  if (grouped) app.log.info({ tracks: grouped }, 'brani esistenti raggruppati in album');
+  registerCatalogRoutes(app, { albums, genres, tracks: library.tracks, settings, lookup: coverLookup });
+  app.decorate('catalog', { albums, lookup: coverLookup, tagWriter });
 
   const events = new IngestEvents();
   const ingest = new IngestService({
@@ -113,6 +154,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
       ),
     events,
     tracks: library.tracks,
+    albums,
     concurrency: ctx.ingestConcurrency,
     log: app.log,
     analyzeSilence:
@@ -123,7 +165,12 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.decorate('ingest', ingest);
   registerIngestRoutes(app, ingest, events, config.publicOrigin);
   if (opts.startIngestWorker !== false) app.addHook('onReady', () => ingest.start());
+  app.addHook('onReady', async () => coverLookup.start());
   app.addHook('onClose', () => ingest.stop());
+  app.addHook('onClose', async () => {
+    await coverLookup.stop();
+    await tagWriter.idle();
+  });
 
   app.get(
     '/api/health',
@@ -138,6 +185,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         Feature.ServerIngest,
         ...(config.registrationToken ? [Feature.Registration] : []),
         ...(config.bridgeAllowedOrigins.length > 0 ? [Feature.BridgeTokens] : []),
+        ...(config.coverLookupForcedOff ? [] : [Feature.CoverLookup]),
       ],
     }),
   );

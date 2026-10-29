@@ -2,6 +2,7 @@ import type { BackendMode, HealthDto, WsServerEvent } from '@spookyfy/shared';
 import { type Api, api as defaultApi, setApiHooks } from './api';
 import { createDeviceBackend } from './device/backend';
 import { getSettings } from './device/backup';
+import { catalogSettings, scheduleCoverLookup } from './device/catalog';
 import { type CoverProcessor, processCover } from './device/cover';
 import { DeviceImporter } from './device/importer';
 import { DeviceLibrary, localFallbackSrc } from './device/library';
@@ -15,6 +16,7 @@ import { PlayReporter } from './player/play-reporter';
 import { Player } from './player/player.svelte';
 import { RealtimeClient } from './realtime/ws';
 import { Router } from './router.svelte';
+import { Catalog } from './stores/catalog.svelte';
 import { Connection } from './stores/connection.svelte';
 import { Jobs } from './stores/jobs.svelte';
 import { Library } from './stores/library.svelte';
@@ -53,6 +55,7 @@ export interface Services {
   session: Session;
   storage: StorageStatus;
   library: Library;
+  catalog: Catalog;
   wakeLock: WakeLockController;
   downloads: Downloads;
   reporter: PlayReporter;
@@ -99,7 +102,7 @@ export function createServices(o: ServiceOverrides = {}): Services {
   let api: Api = o.api ?? defaultApi;
   const lost = $state<{ ids: string[] }>({ ids: [] });
   if (mode === 'client') {
-    const library = new DeviceLibrary({ db });
+    const library = new DeviceLibrary({ db, processCover: o.processCover });
     const gateway = new GatewayClient(o.fetch);
     const cover = o.processCover ?? processCover;
     const bridge = async () => {
@@ -119,12 +122,13 @@ export function createServices(o: ServiceOverrides = {}): Services {
       onEvent: (e) => onImportEvent(e),
     });
     device = { library, importer, gateway, processCover: cover, bridge, lost };
-    api = o.api ?? createDeviceBackend({ library, importer, gateway, auth: defaultApi.auth });
+    api = o.api ?? createDeviceBackend({ library, importer, gateway, auth: defaultApi.auth, db });
   }
   const dev = device;
   const isLocal = (id: string) => (dev ? dev.library.isLocal(id) : downloads.isDownloaded(id));
 
   const library = new Library(api, db);
+  const catalog = new Catalog(api, library);
   const reporter = new PlayReporter({ api, db });
   const player = new Player({
     // Modalità client: si suonano solo brani sul dispositivo, più quelli in importazione
@@ -171,6 +175,8 @@ export function createServices(o: ServiceOverrides = {}): Services {
     onUnreachable: () => connection.markUnreachable(),
   });
   library.onTrackChanged((t) => player.updateTrack(t));
+  // On-premise: la copertina dell'album di un brano scaricato resta disponibile offline.
+  if (mode === 'onpremise') library.onTrackChanged((t) => void downloads.refreshCover(t));
   library.onTrackRemoved((id) => {
     player.removeTrack(id);
     if (!dev) void downloads.remove(id).catch(() => {});
@@ -193,6 +199,7 @@ export function createServices(o: ServiceOverrides = {}): Services {
     session,
     storage,
     library,
+    catalog,
     wakeLock,
     downloads,
     reporter,
@@ -238,6 +245,7 @@ export async function startAuthenticated(s: Services): Promise<void> {
     };
     s.device.importer.init().catch(() => {});
     scheduleSilenceBacklog(s);
+    startCoverLookup(s);
     globalThis.document?.addEventListener('visibilitychange', () => {
       if (!document.hidden) void reconcileDevice(s);
     });
@@ -271,7 +279,29 @@ function scheduleSilenceBacklog(s: Services): void {
   silenceBacklog = { timer, abort };
 }
 
+/** Ricerca automatica delle copertine per gli album del dispositivo senza copertina. */
+let stopCoverLookup: (() => void) | null = null;
+
+function startCoverLookup(s: Services): void {
+  const device = s.device;
+  if (!device) return;
+  stopCoverLookup?.();
+  stopCoverLookup = scheduleCoverLookup(device.library, device.gateway, {
+    enabled: async () => (await catalogSettings(await device.library.database())).coverLookup,
+    // Album aperti, elenco degli album e coda in riproduzione mostrano subito le nuove copertine.
+    onApplied: () => {
+      void s.catalog.refresh();
+      for (const id of Object.keys(s.player.tracks)) {
+        const r = device.library.record(id);
+        if (r) s.player.updateTrack(device.library.toDto(r));
+      }
+    },
+  });
+}
+
 export function stopAuthenticated(s: Services): void {
+  stopCoverLookup?.();
+  stopCoverLookup = null;
   if (silenceBacklog) {
     clearTimeout(silenceBacklog.timer);
     silenceBacklog.abort.abort();

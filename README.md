@@ -37,7 +37,8 @@ Vercel       telefono (PWA + libreria nel browser) ──▶ gateway: login, ric
 1. **Cerca** → **Aggiungi**: il brano viene importato e si ascolta subito.
 2. La PWA lo salva per l'offline (on-premise: con il tasto download; Vercel: sempre).
    Più di 5 secondi di silenzio all'inizio o alla fine del brano vengono saltati (auto-trim).
-3. Per registrarsi serve un token di invito (default `spotifymerdacostosa2026`, **cambialo**); password di almeno 8 caratteri con lettere, cifre e un simbolo.
+3. In **Libreria**, oltre alle playlist, ci sono **Album** e **Generi**: i brani si raggruppano per disco dai tag, le copertine si scelgono dal telefono o si cercano online (MusicBrainz, Cover Art Archive, iTunes; disattivabile), i generi si assegnano a brani e album. Dettagli nella [guida](docs/guida.md#album-e-generi).
+4. Per registrarsi serve un token di invito (default `spotifymerdacostosa2026`, **cambialo**); password di almeno 8 caratteri con lettere, cifre e un simbolo.
 
 ## Installazione su Vercel
 

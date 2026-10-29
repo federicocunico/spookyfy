@@ -1,12 +1,13 @@
 <script lang="ts">
-import { playlistNameSchema, updateTrackBodySchema } from '@spookyfy/shared';
+import { genreKey, playlistNameSchema, updateTrackBodySchema } from '@spookyfy/shared';
 import { ApiError } from '../lib/api';
 import { services } from '../lib/services.svelte';
+import GenreInput from './GenreInput.svelte';
 import Icon from './Icon.svelte';
 import Sheet from './Sheet.svelte';
 
 /** Dialoghi globali: aggiunta a playlist, modifica metadati, richiesta testo, conferma. */
-const { ui, library, toasts } = services();
+const { ui, library, catalog, toasts } = services();
 
 // ---------- aggiungi a playlist ----------
 $effect(() => {
@@ -42,16 +43,20 @@ function newPlaylistFor() {
 }
 
 // ---------- modifica metadati ----------
-let edit = $state({ title: '', artist: '', album: '' });
+let edit = $state({ title: '', artist: '', album: '', genres: [] as string[] });
 let editError = $state<string | null>(null);
 let saving = $state(false);
 $effect(() => {
   const t = ui.editTrack;
   if (t) {
-    edit = { title: t.title, artist: t.artist, album: t.album ?? '' };
+    edit = { title: t.title, artist: t.artist, album: t.album ?? '', genres: [...t.genres] };
     editError = null;
+    void catalog.loadGenres().catch(() => {});
   }
 });
+
+const sameGenres = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((g, i) => genreKey(g) === genreKey(b[i] ?? ''));
 
 async function saveEdit(e: SubmitEvent) {
   e.preventDefault();
@@ -65,7 +70,10 @@ async function saveEdit(e: SubmitEvent) {
   }
   saving = true;
   try {
-    await library.updateTrack(t.id, parsed.data);
+    const updated = await library.updateTrack(t.id, parsed.data);
+    if (!sameGenres(t.genres, edit.genres)) await catalog.setTrackGenres(updated, edit.genres);
+    // Il campo album può aver spostato il brano: elenco degli album aggiornato.
+    if ((t.album ?? '') !== (updated.album ?? '')) void catalog.loadAlbums().catch(() => {});
     ui.editTrack = null;
     toasts.show('Informazioni aggiornate');
   } catch (err) {
@@ -142,6 +150,10 @@ async function doConfirm() {
       <div class="field">
         <label for="edit-album">Album (facoltativo)</label>
         <input id="edit-album" class="input" bind:value={edit.album} maxlength="300" />
+      </div>
+      <div class="field">
+        <label for="edit-genres">Generi</label>
+        <GenreInput id="edit-genres" bind:value={edit.genres} suggest={(p, ex) => catalog.suggestGenres(p, ex)} />
       </div>
       {#if editError}<p class="field-error" role="alert">{editError}</p>{/if}
       <div class="actions">

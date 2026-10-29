@@ -101,6 +101,17 @@ export async function exportBackup(d: BackupDeps, includeAudio: boolean): Promis
     if (res) covers[`covers/${t.id}-512.jpg`] = new Uint8Array(await res.arrayBuffer());
   }
 
+  // Copertine assegnate agli album.
+  for (const a of snap.albums) {
+    const blob = a.hasCover ? await d.library.albumCoverBlob(a.id) : null;
+    if (blob) covers[`albums/${a.id}-512.jpg`] = new Uint8Array(await blob.arrayBuffer());
+  }
+  const albumTrackIds = (albumId: string) =>
+    snap.tracks
+      .filter((t) => t.albumId === albumId)
+      .sort((a, b) => (a.albumPosition ?? 0) - (b.albumPosition ?? 0) || a.id.localeCompare(b.id))
+      .map((t) => t.id);
+
   const itemsByPlaylist = new Map<string, typeof snap.items>();
   for (const i of snap.items)
     itemsByPlaylist.set(i.playlistId, [...(itemsByPlaylist.get(i.playlistId) ?? []), i]);
@@ -116,6 +127,7 @@ export async function exportBackup(d: BackupDeps, includeAudio: boolean): Promis
       ...(t.trimStartMs ? { trimStartMs: t.trimStartMs } : {}),
       ...(t.trimEndMs ? { trimEndMs: t.trimEndMs } : {}),
       ...(t.silenceChecked ? { silenceChecked: true } : {}),
+      ...(t.genres?.length ? { genres: t.genres } : {}),
       sizeBytes: t.sizeBytes,
       mimeType: t.mimeType,
       dominantColor: t.dominantColor,
@@ -131,6 +143,19 @@ export async function exportBackup(d: BackupDeps, includeAudio: boolean): Promis
         .map((i) => i.trackId),
     })),
     plays: snap.plays,
+    albums: snap.albums.map((a) => ({
+      id: a.id,
+      title: a.title,
+      artist: a.artist,
+      year: a.year,
+      origin: a.origin,
+      lookupDone: a.lookupStatus === 'done',
+      cover: covers[`albums/${a.id}-512.jpg`] ? `albums/${a.id}-512.jpg` : null,
+      coverColor: a.coverColor,
+      addedAt: a.createdAt,
+      updatedAt: a.updatedAt,
+      trackIds: albumTrackIds(a.id),
+    })),
   };
   const libraryBytes = strToU8(JSON.stringify(library));
   const manifest: BackupManifest = {
@@ -143,6 +168,7 @@ export async function exportBackup(d: BackupDeps, includeAudio: boolean): Promis
       playlists: library.playlists.length,
       favorites: library.favorites.length,
       plays: library.plays.length,
+      albums: library.albums?.length ?? 0,
     },
     librarySha256: await sha256(libraryBytes),
     audioParts: parts.map((p) => ({
@@ -240,16 +266,38 @@ export async function importBackup(d: BackupDeps, files: File[]): Promise<Import
     }
   }
 
-  // 3. Unione con la libreria del dispositivo.
+  // 3. Unione con la libreria del dispositivo. Prima gli album: un album già presente
+  // (stesso titolo e artista) riceve i brani del backup, senza duplicarsi.
   await d.library.ready();
+  const albumOf = new Map<string, { albumId: string; position: number }>(); // brano del backup → album
+  for (const a of library.albums ?? []) {
+    const albumId = await d.library.findOrCreateAlbum(a.title, a.artist, a.origin);
+    const current = await d.library.getAlbum(albumId);
+    if (current.trackCount === 0 && !current.hasCustomCover) {
+      // Album nuovo: anno, data e stato della ricerca come nel backup.
+      await d.library.restoreAlbumFields(albumId, {
+        year: a.year,
+        createdAt: a.addedAt,
+        lookupDone: a.lookupDone,
+      });
+      const coverBytes = a.cover ? main[a.cover] : undefined;
+      if (coverBytes)
+        await d.library
+          .setAlbumCover(albumId, new Blob([coverBytes as BlobPart], { type: 'image/jpeg' }))
+          .catch(() => {});
+    }
+    a.trackIds.forEach((tid, i) => albumOf.set(tid, { albumId, position: current.trackCount + i + 1 }));
+  }
   const idMap = new Map<string, string>(); // id nel backup → id sul dispositivo
   let added = 0;
   let skipped = 0;
   let missingAudio = 0;
   for (const t of library.tracks) {
     const existing = d.library.bySourceKey(t.sourceKey);
+    const inAlbum = albumOf.get(t.id);
     if (existing) {
       idMap.set(t.id, existing.id);
+      if (inAlbum && !existing.albumId) await d.library.setTrackAlbum(existing.id, inAlbum.albumId);
       skipped++;
       continue;
     }
@@ -265,6 +313,8 @@ export async function importBackup(d: BackupDeps, files: File[]): Promise<Import
       ...(t.trimStartMs ? { trimStartMs: t.trimStartMs } : {}),
       ...(t.trimEndMs ? { trimEndMs: t.trimEndMs } : {}),
       ...(t.silenceChecked ? { silenceChecked: true } : {}),
+      genres: t.genres ?? [],
+      ...(inAlbum ? { albumId: inAlbum.albumId, albumPosition: inAlbum.position } : {}),
       sizeBytes: t.sizeBytes,
       mimeType: t.mimeType,
       dominantColor: t.dominantColor,
@@ -291,6 +341,8 @@ export async function importBackup(d: BackupDeps, files: File[]): Promise<Import
         }
       }
       await d.library.importRecords({ tracks: [record] });
+      // Backup precedente agli album: il brano si raggruppa dal campo album, come alla migrazione.
+      if (!inAlbum && t.album) await d.library.assignByMetadata(t.id, t.album, t.artist);
       missingAudio++;
     }
     idMap.set(t.id, t.id);

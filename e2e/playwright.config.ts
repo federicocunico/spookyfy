@@ -8,6 +8,15 @@ const CLIENT_PORT = 4174;
 export const CLIENT_URL = `http://localhost:${CLIENT_PORT}`;
 const root = path.resolve(import.meta.dirname, '..');
 const data = path.join(import.meta.dirname, '.data');
+/** MusicBrainz, Cover Art Archive e iTunes finti (fake-music.mjs). */
+const MUSIC_PORT = 4599;
+const MUSIC_URL = `http://127.0.0.1:${MUSIC_PORT}`;
+const LOOKUP_ENV = {
+  LOOKUP_MUSICBRAINZ_URL: `${MUSIC_URL}/mb`,
+  LOOKUP_COVERART_URL: `${MUSIC_URL}/caa`,
+  LOOKUP_ITUNES_URL: `${MUSIC_URL}/itunes`,
+  LOOKUP_IMAGE_HOSTS: MUSIC_URL,
+};
 
 /**
  * Test end-to-end sul build di produzione della PWA:
@@ -32,26 +41,33 @@ export default defineConfig({
     // auth.spec.ts gira in entrambe le modalità.
     {
       name: 'chromium',
-      testMatch: /(app|auth)\.spec\.ts/,
+      testMatch: /[\\/](app|auth|albums)\.spec\.ts$/,
       use: { ...devices['Pixel 7'], baseURL: BASE_URL },
     },
     {
       name: 'webkit',
-      testMatch: /(app|auth)\.spec\.ts/,
+      testMatch: /[\\/](app|auth|albums)\.spec\.ts$/,
       use: { ...devices['iPhone 14'], baseURL: BASE_URL },
     },
     {
       name: 'client-chromium',
-      testMatch: /(client|auth)\.spec\.ts/,
+      testMatch: /[\\/](client|auth|client-albums)\.spec\.ts$/,
       use: { ...devices['Pixel 7'], baseURL: CLIENT_URL },
     },
     {
       name: 'client-webkit',
-      testMatch: /(client|auth)\.spec\.ts/,
+      testMatch: /[\\/](client|auth|client-albums)\.spec\.ts$/,
       use: { ...devices['iPhone 14'], baseURL: CLIENT_URL },
     },
   ],
   webServer: [
+    {
+      command: `node "${path.join(import.meta.dirname, 'fake-music.mjs')}"`,
+      url: `${MUSIC_URL}/health`,
+      reuseExistingServer: false,
+      timeout: 10_000,
+      env: { PORT: String(MUSIC_PORT) },
+    },
     {
       command: `node "${path.join(import.meta.dirname, 'start-server.mjs')}"`,
       url: `${BASE_URL}/api/health`,
@@ -73,6 +89,7 @@ export default defineConfig({
         // Il gateway di test può usare questo server come ponte.
         BRIDGE_ALLOWED_ORIGINS: CLIENT_URL,
         LOG_LEVEL: 'warn',
+        ...LOOKUP_ENV,
       },
     },
     {
@@ -80,7 +97,7 @@ export default defineConfig({
       url: `${CLIENT_URL}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
-      env: { PORT: String(CLIENT_PORT), NODE_ENV: 'development' },
+      env: { PORT: String(CLIENT_PORT), NODE_ENV: 'development', ...LOOKUP_ENV },
     },
   ],
 });

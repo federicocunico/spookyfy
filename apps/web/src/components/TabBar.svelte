@@ -13,7 +13,17 @@ const tabs: { label: string; path: string; icon: IconName; activeIcon: IconName;
     path: pathOf.library(),
     icon: 'library',
     activeIcon: 'library',
-    match: ['library', 'downloaded', 'favorites', 'playlist', 'settings'],
+    match: [
+      'library',
+      'downloaded',
+      'albums',
+      'genres',
+      'album',
+      'genre',
+      'favorites',
+      'playlist',
+      'settings',
+    ],
   },
 ];
 

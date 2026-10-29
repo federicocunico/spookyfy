@@ -13,6 +13,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { ulid } from 'ulid';
 import type { Clock } from '../clock.js';
 import { HttpError, notFound } from '../http-errors.js';
+import type { AlbumService } from '../library/albums.js';
 import type { TrackService } from '../library/tracks.js';
 import { COVER_SIZES, absMediaPath, audioRelPath, coverRelPath, coverRelPrefix } from '../media/paths.js';
 import type { SilenceAnalyzer } from '../media/silence.js';
@@ -59,6 +60,8 @@ export interface IngestServiceOptions {
   ytdlp: YtDlp;
   events: IngestEvents;
   tracks: TrackService;
+  /** Raggruppamento automatico: il brano entra nell'album indicato dai metadati. */
+  albums?: AlbumService;
   concurrency: number;
   log: FastifyBaseLogger;
   /** Auto-trim: silenzio ai bordi del brano (ffmpeg). Senza, i brani si riproducono interi. */
@@ -361,6 +364,7 @@ export class IngestService {
           .run(trackId, now, row.id);
       })();
       finalFiles.length = 0;
+      this.o.albums?.assignByMetadata(trackId, meta.album, meta.artist);
       this.emitCompleted(row.id, trackId, row.requested_by);
     } catch (err) {
       await Promise.all(finalFiles.map((f) => fs.rm(f, { force: true })));

@@ -27,11 +27,15 @@ let backupInput: HTMLInputElement | undefined = $state();
 let bridgeUrl = $state('');
 let bridgeToken = $state('');
 let bridgeStatus = $state<{ ok: boolean; message: string } | null>(null);
+/** L'utente ha già scritto nei campi del ponte: i valori salvati non li sovrascrivono. */
+let bridgeEdited = false;
 
 async function refresh() {
   settings = await getSettings(await db());
-  bridgeUrl = settings.bridge?.url ?? '';
-  bridgeToken = settings.bridge?.token ?? '';
+  if (!bridgeEdited) {
+    bridgeUrl = settings.bridge?.url ?? '';
+    bridgeToken = settings.bridge?.token ?? '';
+  }
   // Dopo un ricaricamento la libreria locale potrebbe non essere ancora in memoria.
   await device.library.ready();
   usage = device.library.usage();
@@ -175,11 +179,11 @@ async function saveBridge(e: SubmitEvent) {
   <form onsubmit={saveBridge} novalidate>
     <div class="field">
       <label for="bridge-url">Indirizzo del server</label>
-      <input id="bridge-url" class="input" type="url" placeholder="https://spookyfy.example.com" bind:value={bridgeUrl} />
+      <input id="bridge-url" class="input" type="url" placeholder="https://spookyfy.example.com" bind:value={bridgeUrl} oninput={() => (bridgeEdited = true)} />
     </div>
     <div class="field">
       <label for="bridge-token">Token di accesso</label>
-      <input id="bridge-token" class="input" autocomplete="off" spellcheck="false" bind:value={bridgeToken} />
+      <input id="bridge-token" class="input" autocomplete="off" spellcheck="false" bind:value={bridgeToken} oninput={() => (bridgeEdited = true)} />
     </div>
     {#if bridgeStatus}
       <p class={bridgeStatus.ok ? 'ok' : 'field-error'} role="status" data-testid="bridge-status">{bridgeStatus.message}</p>

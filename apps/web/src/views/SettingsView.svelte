@@ -1,5 +1,6 @@
 <script lang="ts">
 import { untrack } from 'svelte';
+import CatalogSettings from '../components/CatalogSettings.svelte';
 import DeviceSettings from '../components/DeviceSettings.svelte';
 import Icon from '../components/Icon.svelte';
 import TokensSection from '../components/TokensSection.svelte';
@@ -45,6 +46,8 @@ async function logout() {
       <Icon name="logout" size={18} /> Esci
     </button>
   </section>
+
+  <CatalogSettings />
 
   {#if mode === 'client'}
     <DeviceSettings />

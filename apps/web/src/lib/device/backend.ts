@@ -1,4 +1,11 @@
-import type { Api } from '../api';
+import { type Api, api as remoteApi } from '../api';
+import type { Db } from '../offline/db';
+import {
+  applyCandidateOnDevice,
+  catalogSettings,
+  ensureLookupEnabled,
+  updateCatalogSettings,
+} from './catalog';
 import type { DeviceImporter } from './importer';
 import type { DeviceLibrary } from './library';
 import type { BridgeClient, GatewayClient } from './remote';
@@ -9,6 +16,8 @@ export interface DeviceBackendDeps {
   gateway: GatewayClient;
   /** Autenticazione sul gateway: stessi endpoint dell'on-premise. */
   auth: Api['auth'];
+  /** Impostazioni del dispositivo (ricerca online di copertine). */
+  db: () => Promise<Db>;
 }
 
 /**
@@ -49,6 +58,40 @@ export function createDeviceBackend(d: DeviceBackendDeps): Api {
       addItem: (id, trackId) => library.addItem(id, trackId),
       removeItem: (id, itemId) => library.removeItem(id, itemId),
       moveItem: (id, itemId, toIndex) => library.moveItem(id, itemId, toIndex),
+    },
+    albums: {
+      list: async (sort, query) => ({ items: await library.listAlbums(sort, query) }),
+      get: (id) => library.getAlbum(id),
+      create: (body) => library.createAlbum(body),
+      update: (id, body) => library.updateAlbum(id, body),
+      delete: (id) => library.deleteAlbum(id),
+      addTracks: (id, trackIds, toIndex) => library.addAlbumTracks(id, trackIds, toIndex),
+      removeTrack: async (id, trackId) => (await library.removeAlbumTrack(id, trackId)) ?? undefined,
+      moveTrack: (id, trackId, toIndex) => library.moveAlbumTrack(id, trackId, toIndex),
+      setCover: (id, image) => library.setAlbumCover(id, image),
+      removeCover: (id) => library.removeAlbumCover(id),
+      updateGenres: (id, change) => library.updateAlbumGenres(id, change.add, change.remove),
+      applyCandidate: async (id, body) => {
+        await ensureLookupEnabled(await d.db());
+        return applyCandidateOnDevice(library, gateway, id, body);
+      },
+    },
+    genres: {
+      list: async () => ({ items: await library.listGenres() }),
+      get: (name) => library.getGenre(name),
+      setForTrack: (trackId, genres) => library.setTrackGenres(trackId, genres),
+    },
+    lookup: {
+      // Con la ricerca spenta non parte alcuna richiesta verso il gateway.
+      search: async (query, signal) => {
+        await ensureLookupEnabled(await d.db());
+        return gateway.lookupAlbums(query, signal);
+      },
+      imageUrl: remoteApi.lookup.imageUrl,
+    },
+    settings: {
+      get: async () => catalogSettings(await d.db()),
+      update: async (body) => updateCatalogSettings(await d.db(), body),
     },
     remote: {
       search: async (q, signal) => ({ items: markLocal((await gateway.search(q, signal)).items) }),

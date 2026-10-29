@@ -56,3 +56,40 @@ describe('formato di backup v1', () => {
     expect(backupManifestSchema.safeParse({ ...manifest, format: 'altro' }).success).toBe(false);
   });
 });
+
+describe('album e generi nel backup', () => {
+  const withAlbums = {
+    ...library,
+    tracks: [{ ...library.tracks[0], album: 'Demo', genres: ['Rock', 'Indie'] }],
+    albums: [
+      {
+        id: 'a1',
+        title: 'Demo',
+        artist: 'Band',
+        year: 2026,
+        origin: 'manual',
+        lookupDone: true,
+        cover: 'albums/a1-512.jpg',
+        coverColor: '#102030',
+        addedAt: 1,
+        updatedAt: 2,
+        trackIds: ['t1'],
+      },
+    ],
+  };
+
+  test('un backup precedente agli album resta valido, senza album né generi', () => {
+    const r = backupLibrarySchema.parse(library);
+    expect(r.albums).toBeUndefined();
+    expect(r.tracks[0]!.genres).toBeUndefined();
+  });
+
+  test('album e generi vengono letti', () => {
+    const r = backupLibrarySchema.parse(withAlbums);
+    expect(r.albums?.[0]).toMatchObject({ title: 'Demo', trackIds: ['t1'], cover: 'albums/a1-512.jpg' });
+    expect(r.tracks[0]!.genres).toEqual(['Rock', 'Indie']);
+    expect(
+      backupManifestSchema.parse({ ...manifest, counts: { ...manifest.counts, albums: 1 } }).counts.albums,
+    ).toBe(1);
+  });
+});

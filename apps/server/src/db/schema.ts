@@ -1,4 +1,13 @@
-import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+  type AnySQLiteColumn,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -46,9 +55,67 @@ export const tracks = sqliteTable(
     coverPath: text('cover_path').notNull(),
     addedBy: text('added_by').references(() => users.id, { onDelete: 'set null' }),
     addedAt: integer('added_at').notNull(),
+    /** Album del catalogo (il campo `album` ne è la copia del titolo, aggiornata insieme). */
+    albumId: text('album_id').references((): AnySQLiteColumn => albums.id, { onDelete: 'set null' }),
+    /** Posizione frazionaria nell'album, come quella degli elementi delle playlist. */
+    albumPosition: real('album_position'),
   },
-  (t) => [index('tracks_added_idx').on(t.addedAt)],
+  (t) => [index('tracks_added_idx').on(t.addedAt), index('tracks_album_idx').on(t.albumId, t.albumPosition)],
 );
+
+export const albums = sqliteTable(
+  'albums',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    artist: text('artist').notNull(),
+    year: integer('year'),
+    /** Forme normalizzate (albumKey) per il raggruppamento automatico. */
+    titleKey: text('title_key').notNull(),
+    artistKey: text('artist_key').notNull(),
+    origin: text('origin', { enum: ['auto', 'manual'] }).notNull(),
+    /** Prefisso della copertina assegnata (`<prefisso>-512.jpg`), NULL = quella del primo brano. */
+    coverPath: text('cover_path'),
+    coverColor: text('cover_color'),
+    /** Cambia a ogni nuova copertina: entra negli URL per non mostrare copie vecchie dalle cache. */
+    coverVersion: integer('cover_version').notNull().default(0),
+    /** Ricerca automatica della copertina: da fare o già fatta (una sola volta per album). */
+    lookupStatus: text('lookup_status', { enum: ['pending', 'done'] })
+      .notNull()
+      .default('pending'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('albums_key_idx').on(t.titleKey, t.artistKey),
+    index('albums_created_idx').on(t.createdAt),
+  ],
+);
+
+export const genres = sqliteTable('genres', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  key: text('key').notNull().unique(),
+});
+
+export const trackGenres = sqliteTable(
+  'track_genres',
+  {
+    trackId: text('track_id')
+      .notNull()
+      .references(() => tracks.id, { onDelete: 'cascade' }),
+    genreId: text('genre_id')
+      .notNull()
+      .references(() => genres.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.trackId, t.genreId] }), index('track_genres_genre_idx').on(t.genreId)],
+);
+
+/** Impostazioni del server (chiave/valore JSON) e marcatori delle migrazioni di dati. */
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
 
 export const ingestJobs = sqliteTable(
   'ingest_jobs',

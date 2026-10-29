@@ -60,6 +60,8 @@ function playWhileImporting() {
     title: result.title,
     artist: result.artist,
     album: null,
+    albumId: null,
+    genres: [],
     durationMs: result.durationMs ?? 0,
     sizeBytes: 0,
     dominantColor: '#3a3a3a',

@@ -1,5 +1,6 @@
 <script lang="ts">
 import BulkDownloadBar from './components/BulkDownloadBar.svelte';
+import CatalogDialogs from './components/CatalogDialogs.svelte';
 import Dialogs from './components/Dialogs.svelte';
 import FullPlayer from './components/FullPlayer.svelte';
 import MiniPlayer from './components/MiniPlayer.svelte';
@@ -12,8 +13,10 @@ import UpdatePrompt from './components/UpdatePrompt.svelte';
 import { pwa } from './lib/pwa.svelte';
 import { PUBLIC_ROUTES, pathOf, safeNext } from './lib/router.svelte';
 import { services, startAuthenticated, stopAuthenticated } from './lib/services.svelte';
+import AlbumView from './views/AlbumView.svelte';
 import DownloadedView from './views/DownloadedView.svelte';
 import FavoritesView from './views/FavoritesView.svelte';
+import GenreView from './views/GenreView.svelte';
 import HomeView from './views/HomeView.svelte';
 import LibraryView from './views/LibraryView.svelte';
 import LoginView from './views/LoginView.svelte';
@@ -87,7 +90,19 @@ $effect(() => {
     {:else if route.name === 'search'}
       <SearchView />
     {:else if route.name === 'library'}
-      <LibraryView />
+      <LibraryView view="playlists" />
+    {:else if route.name === 'albums'}
+      <LibraryView view="albums" />
+    {:else if route.name === 'genres'}
+      <LibraryView view="genres" />
+    {:else if route.name === 'album'}
+      {#key route.params.id}
+        <AlbumView id={route.params.id ?? ''} />
+      {/key}
+    {:else if route.name === 'genre'}
+      {#key route.params.name}
+        <GenreView name={route.params.name ?? ''} />
+      {/key}
     {:else if route.name === 'downloaded'}
       <DownloadedView />
     {:else if route.name === 'favorites'}
@@ -106,6 +121,7 @@ $effect(() => {
   <TrackMenu />
   <QueueSheet />
   <Dialogs />
+  <CatalogDialogs />
 {/if}
 
 <Toasts />

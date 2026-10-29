@@ -106,3 +106,36 @@ test('lo stesso file importato due volte non si duplica (hash del contenuto)', a
   expect(library.usage().count).toBe(1);
   expect(await fileKey(new File([bytes], 'x'))).toMatch(/^file:[0-9a-f]{64}:\d+$/);
 });
+
+/** MP3 con album, numero di traccia e genere nei tag (TALB, TRCK, TCON, TPE2). */
+function mp3WithAlbum(title: string, track: string, genre: string) {
+  const frames = concat(
+    text('TIT2', title),
+    text('TPE1', 'Nirvana'),
+    text('TPE2', 'Nirvana'),
+    text('TALB', 'In Utero'),
+    text('TRCK', track),
+    text('TCON', genre),
+  );
+  const header = concat(latin1('ID3'), Uint8Array.of(3, 0, 0), syncsafe(frames.length));
+  return concat(header, frames, silentFrames(115));
+}
+
+test('genere, numero di traccia e album dai tag: un solo album nell’ordine delle tracce', async () => {
+  const { library, deps } = await setup();
+  const files = [
+    new File([mp3WithAlbum('Heart-Shaped Box', '2/12', 'Alternative; Indie')], 'b.mp3', {
+      type: 'audio/mpeg',
+    }),
+    new File([mp3WithAlbum('Serve the Servants', '1/12', 'Alternative; Indie')], 'a.mp3', {
+      type: 'audio/mpeg',
+    }),
+  ];
+  const [first] = await importFiles(files, deps);
+  expect(first).toMatchObject({ status: 'imported', track: { genres: ['Alternative', 'Indie'] } });
+  const albums = await library.listAlbums();
+  expect(albums).toEqual([expect.objectContaining({ title: 'In Utero', artist: 'Nirvana', trackCount: 2 })]);
+  const album = await library.getAlbum(albums[0]!.id);
+  expect(album.tracks.map((t) => t.title)).toEqual(['Serve the Servants', 'Heart-Shaped Box']);
+  expect(album.genres).toEqual(['Alternative', 'Indie']);
+});

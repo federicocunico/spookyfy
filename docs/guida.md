@@ -74,8 +74,9 @@ sudo nano /etc/spookyfy/spookyfy.env
 | `INGEST_NICE` | `10` | Priorità di yt-dlp/ffmpeg (0 = normale, 19 = minima). |
 | `TRUST_CF_HEADERS` | `true` | IP del client da `CF-Connecting-IP` (per il rate limit dei login). |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`… |
+| `COVER_LOOKUP` | `on` | `off` spegne la ricerca online di copertine per tutto il server: nessuna richiesta a MusicBrainz, Cover Art Archive o iTunes. |
 
-`COOKIE_SECURE` e `YTDLP_NODE_SCRIPT` esistono solo per i test end-to-end: non vanno usate in produzione.
+`COOKIE_SECURE`, `YTDLP_NODE_SCRIPT` e `LOOKUP_MUSICBRAINZ_URL` / `LOOKUP_COVERART_URL` / `LOOKUP_ITUNES_URL` / `LOOKUP_IMAGE_HOSTS` (servizi musicali finti) esistono solo per i test end-to-end: non vanno usate in produzione.
 
 ### Token di registrazione e primo utente
 
@@ -134,6 +135,24 @@ Se un brano ha **più di 5 secondi di silenzio** all'inizio o alla fine (sotto �
 
 Regole e soglie: `packages/shared/src/silence.ts`.
 
+## Album e generi
+
+Gli **album** e i **generi** sono categorie della Libreria separate dalle playlist: si trovano nei filtri "Album" e "Generi" e non modificano alcuna playlist.
+
+- **Raggruppamento automatico**: un brano importato con l'album nei metadati (tag del file, YouTube Music) finisce nell'album con lo stesso titolo e artista, creato se manca, nell'ordine del numero di traccia. Al primo avvio dopo l'aggiornamento i brani già in libreria vengono raggruppati una volta. "Nevermind" e "Nevermind (Remastered)" restano due album: si possono unire spostando i brani o correggendo il campo album.
+- **Gestione**: dalla pagina dell'album si cambiano titolo, artista e anno, si riordinano i brani, si eliminano gli album (i brani restano in libreria). Dal menu ⋯ di un brano: "Aggiungi ad album…", "Vai all'album", "Togli dall'album", "Generi…" e, per i brani senza album, "Cerca album online". Un album creato in automatico sparisce quando resta senza brani; uno creato a mano resta.
+- **Copertina**: si sceglie un'immagine dal telefono (JPEG, PNG o WebP fino a 10 MB, ritagliata quadrata) o un risultato della ricerca online; senza copertina assegnata l'album usa quella del primo brano. Una copertina assegnata la mostrano anche tutti i brani dell'album, nel player e nella schermata di blocco.
+- **Generi**: ogni brano può averne fino a 10; aggiunti a un album valgono per tutti i suoi brani. I generi letti dai file vengono importati, e la grafia è quella già in uso ("hip-hop" diventa "Hip-Hop" se esiste).
+- **On-premise** album e generi sono condivisi da tutti gli account e vengono scritti anche nei tag dei file (album, artista dell'album, numero di traccia, genere); **in modalità client** vivono sul telefono e viaggiano nel backup.
+
+### Ricerca online di copertine
+
+L'app cerca copertine, anno e generi su **MusicBrainz** (copertine da **Cover Art Archive**) e, come riserva, su **iTunes Search**: servizi gratuiti e senza chiave. Le richieste partono dal server on-premise o dal gateway Vercel, mai dal telefono, e rispettano il limite di MusicBrainz di una richiesta al secondo.
+
+- Per un album nuovo senza copertina la ricerca parte da sola e applica **solo la copertina**, e solo se titolo e artista corrispondono (senza contare diciture come "Remastered" o "Deluxe"). Ogni album viene cercato in automatico una volta; gli album già in libreria vengono cercati in background dopo l'aggiornamento.
+- Dalla pagina dell'album, pulsante della copertina → "Cerca online", si sceglie fra i candidati e si decide se applicare anche titolo, artista, anno e generi proposti.
+- **Dati inviati**: titolo, artista e album dei brani. L'interruttore "Cerca copertine online" nelle Impostazioni spegne ogni richiesta (on-premise vale per tutto il server); `COVER_LOOKUP=off` la spegne in modo definitivo dalla configurazione.
+
 ## Installare l'app sul telefono
 
 - **iPhone (Safari)**: apri `https://spookyfy.example.com`, tocca *Condividi* → *Aggiungi a schermata Home*. Apri Spookyfy dall'icona: solo l'app installata ottiene lo storage persistente e i controlli in lockscreen come un'app nativa. La prima riproduzione parte toccando Play.
@@ -143,7 +162,7 @@ Funzioni principali: ricerca nella libreria e su YouTube, importazione con avanz
 
 ## Modalità client su Vercel
 
-Seconda modalità, senza server da gestire: il gateway gira su **Vercel** (piano Hobby, 6 funzioni serverless sulle 12 disponibili) e fa solo da autenticatore e da tramite verso YouTube; **libreria, playlist, preferiti, ascolti e file audio restano sul telefono**. La stessa PWA riconosce la modalità dalla health check del backend.
+Seconda modalità, senza server da gestire: il gateway gira su **Vercel** (piano Hobby, 7 funzioni serverless sulle 12 disponibili) e fa solo da autenticatore e da tramite verso YouTube e verso i database musicali per le copertine; **libreria, playlist, preferiti, ascolti e file audio restano sul telefono**. La stessa PWA riconosce la modalità dalla health check del backend.
 
 > **Rischio da conoscere:** YouTube blocca spesso gli IP dei datacenter come quelli di Vercel. In quel caso ricerca e importazione dal gateway falliscono con un messaggio specifico e l'app propone le alternative: **importa da file** (MP3/M4A dal telefono) e il **ponte verso un server on-premise** ([docs/bridge.md](bridge.md)). Il gateway non usa cookie di account né altri modi di aggirare i controlli.
 

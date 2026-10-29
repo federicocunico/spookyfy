@@ -28,6 +28,14 @@ const envSchema = z
     UPSTASH_REDIS_REST_URL: z.string().url().optional(),
     UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
     COOKIE_SECURE: booleanString.default('true'),
+    /** `off` spegne la ricerca online di copertine (nessuna richiesta ai database musicali). */
+    COVER_LOOKUP: z.enum(['on', 'off']).default('on'),
+    /** URL di base dei database musicali (servizi finti negli e2e). */
+    LOOKUP_MUSICBRAINZ_URL: z.string().url().optional(),
+    LOOKUP_COVERART_URL: z.string().url().optional(),
+    LOOKUP_ITUNES_URL: z.string().url().optional(),
+    /** Host (o origini complete) da cui si accettano immagini di copertina, separati da virgola. */
+    LOOKUP_IMAGE_HOSTS: z.string().optional(),
   })
   .superRefine((e, ctx) => {
     if (!e.PUBLIC_ORIGIN && !e.VERCEL_PROJECT_PRODUCTION_URL) {
@@ -68,6 +76,8 @@ export interface GatewayConfig {
   publicOrigin: string;
   kv: KvConfig | null;
   cookieSecure: boolean;
+  coverLookupForcedOff: boolean;
+  lookup: { musicbrainzUrl?: string; coverArtUrl?: string; itunesUrl?: string; imageHosts?: string[] };
   version: string;
 }
 
@@ -95,6 +105,15 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     publicOrigin: e.PUBLIC_ORIGIN ?? `https://${e.VERCEL_PROJECT_PRODUCTION_URL}`,
     kv: kvConfigFromEnv(e),
     cookieSecure: e.COOKIE_SECURE,
+    coverLookupForcedOff: e.COVER_LOOKUP === 'off',
+    lookup: {
+      musicbrainzUrl: e.LOOKUP_MUSICBRAINZ_URL,
+      coverArtUrl: e.LOOKUP_COVERART_URL,
+      itunesUrl: e.LOOKUP_ITUNES_URL,
+      imageHosts: e.LOOKUP_IMAGE_HOSTS?.split(',')
+        .map((h) => h.trim())
+        .filter(Boolean),
+    },
     version: GATEWAY_VERSION,
   };
 }

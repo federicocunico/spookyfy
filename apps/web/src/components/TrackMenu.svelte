@@ -1,11 +1,16 @@
 <script lang="ts">
+import { pathOf } from '../lib/router.svelte';
 import { services } from '../lib/services.svelte';
 import Cover from './Cover.svelte';
 import Icon, { type IconName } from './Icon.svelte';
 import Sheet from './Sheet.svelte';
 
-const { ui, player, library, downloads, toasts, connection, mode, device } = services();
+const { ui, player, library, catalog, downloads, toasts, connection, mode, device, router } = services();
 const state = $derived(ui.menu);
+// "Cerca album online" solo se la ricerca è attiva.
+$effect(() => {
+  if (state && catalog.settings === null) void catalog.loadSettings().catch(() => {});
+});
 
 function close() {
   ui.menu = null;
@@ -101,6 +106,62 @@ const actions = $derived.by((): Action[] => {
         run(() => library.removeFromPlaylist(playlistId, itemId), 'Brano non rimosso dalla playlist'),
     });
   }
+  // Album e generi: categoria separata dalle playlist.
+  const albumId = track.albumId;
+  if (albumId) {
+    list.push(
+      {
+        id: 'go-to-album',
+        label: 'Vai all’album',
+        icon: 'album',
+        run: () => {
+          close();
+          router.navigate(pathOf.album(albumId));
+        },
+      },
+      {
+        id: 'remove-from-album',
+        label: 'Togli dall’album',
+        icon: 'close',
+        online: true,
+        run: () =>
+          run(async () => void (await catalog.removeTrack(albumId, track)), 'Brano non tolto dall’album'),
+      },
+    );
+  } else if (catalog.settings?.coverLookup !== false) {
+    list.push({
+      id: 'lookup',
+      label: 'Cerca album online',
+      icon: 'search',
+      online: true,
+      run: () => {
+        close();
+        ui.lookupTrack = track;
+      },
+    });
+  }
+  list.push(
+    {
+      id: 'add-to-album',
+      label: albumId ? 'Sposta in un altro album…' : 'Aggiungi ad album…',
+      icon: 'album',
+      online: true,
+      run: () => {
+        close();
+        ui.addToAlbum = track;
+      },
+    },
+    {
+      id: 'genres',
+      label: 'Generi…',
+      icon: 'music',
+      online: true,
+      run: () => {
+        close();
+        ui.editTrack = track;
+      },
+    },
+  );
   list.push(
     {
       id: 'edit',

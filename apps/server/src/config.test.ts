@@ -51,4 +51,26 @@ describe('loadConfig', () => {
     expect(loadConfig({ TRUST_CF_HEADERS: 'false' }).trustCfHeaders).toBe(false);
     expect(() => loadConfig({ TRUST_CF_HEADERS: 'forse' })).toThrow(/TRUST_CF_HEADERS/);
   });
+
+  test('ricerca online di copertine: COVER_LOOKUP e servizi finti per gli e2e', () => {
+    const d = loadConfig({}, '/srv/spk');
+    expect(d.coverLookupForcedOff).toBe(false);
+    expect(d.lookup).toEqual({
+      musicbrainzUrl: undefined,
+      coverArtUrl: undefined,
+      itunesUrl: undefined,
+      imageHosts: undefined,
+    });
+    const c = loadConfig({
+      COVER_LOOKUP: 'off',
+      LOOKUP_MUSICBRAINZ_URL: 'http://127.0.0.1:4599/mb',
+      LOOKUP_COVERART_URL: 'http://127.0.0.1:4599/caa',
+      LOOKUP_ITUNES_URL: 'http://127.0.0.1:4599/itunes',
+      LOOKUP_IMAGE_HOSTS: 'http://127.0.0.1:4599, coverartarchive.org',
+    });
+    expect(c.coverLookupForcedOff).toBe(true);
+    expect(c.lookup.imageHosts).toEqual(['http://127.0.0.1:4599', 'coverartarchive.org']);
+    expect(c.lookup.musicbrainzUrl).toBe('http://127.0.0.1:4599/mb');
+    expect(() => loadConfig({ COVER_LOOKUP: 'forse' })).toThrow(ConfigError);
+  });
 });
