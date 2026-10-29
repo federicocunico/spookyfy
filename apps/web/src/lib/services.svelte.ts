@@ -237,6 +237,7 @@ export async function startAuthenticated(s: Services): Promise<void> {
       if (s.device) s.device.lost.ids = s.device.library.lostTracks().map((t) => t.id);
     };
     s.device.importer.init().catch(() => {});
+    scheduleSilenceBacklog(s);
     globalThis.document?.addEventListener('visibilitychange', () => {
       if (!document.hidden) void reconcileDevice(s);
     });
@@ -250,7 +251,32 @@ export async function startAuthenticated(s: Services): Promise<void> {
   void s.jobs.reload().catch(() => {});
 }
 
+/** Auto-trim dei brani già sul dispositivo, poco dopo l'avvio per non rallentarlo. */
+const SILENCE_BACKLOG_DELAY_MS = 5000;
+let silenceBacklog: { timer: ReturnType<typeof setTimeout>; abort: AbortController } | null = null;
+
+function scheduleSilenceBacklog(s: Services): void {
+  const device = s.device;
+  if (!device) return;
+  const abort = new AbortController();
+  const timer = setTimeout(async () => {
+    const analyzed = await device.library.analyzeSilenceBacklog(abort.signal).catch(() => 0);
+    if (!analyzed || abort.signal.aborted) return;
+    // La coda in riproduzione usa subito i nuovi punti di trim.
+    for (const id of Object.keys(s.player.tracks)) {
+      const r = device.library.record(id);
+      if (r) s.player.updateTrack(device.library.toDto(r));
+    }
+  }, SILENCE_BACKLOG_DELAY_MS);
+  silenceBacklog = { timer, abort };
+}
+
 export function stopAuthenticated(s: Services): void {
+  if (silenceBacklog) {
+    clearTimeout(silenceBacklog.timer);
+    silenceBacklog.abort.abort();
+    silenceBacklog = null;
+  }
   s.realtime.stop();
   s.device?.importer.stop();
   s.player.stop();

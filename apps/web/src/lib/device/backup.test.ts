@@ -117,6 +117,23 @@ describe('importazione', () => {
     expect((await dst.library.get(a.id)).playCount).toBe(1);
   });
 
+  test('i punti di auto-trim viaggiano nel backup e non si ricalcolano', async () => {
+    const db = await openSpookyfyDb(`spk-backup-trim-${Date.now()}-${++n}`);
+    const library = new DeviceLibrary({
+      db: async () => db,
+      analyzeSilence: async () => ({ trimStartMs: 6000, trimEndMs: 900 }),
+    });
+    const { a } = await seed(library);
+    const files = await exportBackup({ db: async () => db, library, now: () => 1, partBytes: 250 }, true);
+
+    const dstDb = await openSpookyfyDb(`spk-backup-trim-dst-${Date.now()}-${++n}`);
+    const analyze = vi.fn(async () => ({}));
+    const dst = new DeviceLibrary({ db: async () => dstDb, analyzeSilence: analyze });
+    await importBackup({ db: async () => dstDb, library: dst, now: () => 2, partBytes: 250 }, files);
+    expect(await dst.get(a.id)).toMatchObject({ trimStartMs: 6000, trimEndMs: 900 });
+    expect(analyze).not.toHaveBeenCalled();
+  });
+
   test('backup leggero: i brani compaiono come "da riscaricare"', async () => {
     const src = await makeLibrary();
     const { a } = await seed(src.library);

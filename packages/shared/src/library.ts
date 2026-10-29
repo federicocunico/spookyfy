@@ -14,6 +14,10 @@ export interface TrackDto {
   artist: string;
   album: string | null;
   durationMs: number;
+  /** Auto-trim (vedi silence.ts): la riproduzione parte da qui, saltando il silenzio iniziale. */
+  trimStartMs?: number;
+  /** Auto-trim: la riproduzione finisce qui, saltando il silenzio finale. */
+  trimEndMs?: number;
   sizeBytes: number;
   /** Colore dominante della copertina, `#rrggbb`. */
   dominantColor: string;

@@ -133,6 +133,8 @@ export async function createTestContext(opts: TestContextOptions = {}): Promise<
     clock,
     logger: false,
     ytdlp: fakeYtDlp(),
+    // Auto-trim spento: senza, con ffmpeg installato ogni test lo eseguirebbe in background.
+    analyzeSilence: null,
     hardware: { cores: 4, totalMemBytes: 4 * 1024 ** 3, arch: 'arm64', platform: 'linux', ...opts.hardware },
     ...opts.buildOptions,
   });

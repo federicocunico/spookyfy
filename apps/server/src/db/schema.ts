@@ -33,6 +33,11 @@ export const tracks = sqliteTable(
     artist: text('artist').notNull(),
     album: text('album'),
     durationMs: integer('duration_ms').notNull(),
+    /** Auto-trim: inizio e fine della riproduzione in ms (NULL = nessun silenzio da saltare). */
+    trimStartMs: integer('trim_start_ms'),
+    trimEndMs: integer('trim_end_ms'),
+    /** 1 = silenzio ai bordi già analizzato; gli altri brani vengono analizzati in background. */
+    silenceChecked: integer('silence_checked').notNull().default(0),
     sizeBytes: integer('size_bytes').notNull(),
     dominantColor: text('dominant_color').notNull(),
     /** Percorso relativo a MEDIA_DIR del file MP3. */

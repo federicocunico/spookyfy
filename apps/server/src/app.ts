@@ -22,6 +22,7 @@ import { FavoriteService, PlayService, PlaylistService } from './library/persona
 import { type LibraryServices, registerLibraryRoutes } from './library/routes.js';
 import { TrackService } from './library/tracks.js';
 import { registerMediaRoutes } from './media/routes.js';
+import { type SilenceAnalyzer, createSilenceAnalyzer } from './media/silence.js';
 import { registerWeb } from './web.js';
 
 export interface BuildAppOptions {
@@ -32,6 +33,8 @@ export interface BuildAppOptions {
   logger?: FastifyServerOptions['logger'];
   /** Sostituisce yt-dlp (nei test, con l'eseguibile finto). */
   ytdlp?: YtDlp;
+  /** Auto-trim: analizzatore del silenzio (null = disattivato; predefinito: ffmpeg). */
+  analyzeSilence?: SilenceAnalyzer | null;
   /** false per non avviare il worker di ingestione su ready(). */
   startIngestWorker?: boolean;
 }
@@ -112,6 +115,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
     tracks: library.tracks,
     concurrency: ctx.ingestConcurrency,
     log: app.log,
+    analyzeSilence:
+      opts.analyzeSilence !== undefined
+        ? (opts.analyzeSilence ?? undefined)
+        : createSilenceAnalyzer({ ffmpegPath: config.ffmpegPath, nice: config.ingestNice }),
   });
   app.decorate('ingest', ingest);
   registerIngestRoutes(app, ingest, events, config.publicOrigin);

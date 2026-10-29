@@ -16,6 +16,10 @@ export const backupTrackSchema = z.object({
   artist: z.string().min(1).max(300),
   album: z.string().max(300).nullable(),
   durationMs: z.number().int().nonnegative(),
+  /** Auto-trim già calcolato (assente nei backup precedenti: si ricalcola). */
+  trimStartMs: z.number().int().nonnegative().optional(),
+  trimEndMs: z.number().int().nonnegative().optional(),
+  silenceChecked: z.boolean().optional(),
   sizeBytes: z.number().int().nonnegative(),
   mimeType: z.string().min(1).max(100),
   dominantColor: z.string().regex(/^#[0-9a-f]{6}$/i),

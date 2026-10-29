@@ -16,6 +16,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # ffmpeg vero per il test dell'auto-trim sul server (silencedetect), come sui server di casa.
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - run: pnpm test
       # Limite del piano Hobby di Vercel: al massimo 12 funzioni serverless nel gateway.
       - run: pnpm --filter @spookyfy/gateway count-functions

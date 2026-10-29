@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { type Page, expect, test } from '@playwright/test';
 import { PASSWORD, TOKEN, audioState, ensureServiceWorker, register, uniqueUser } from './helpers';
 
@@ -191,4 +192,28 @@ test.describe('senza Service Worker (ricarica forzata con Ctrl+F5)', () => {
     await register(page, uniqueUser('clnosw', browserName));
     await importAndPlay(page, 'Senza service worker');
   });
+});
+
+test('modalità client: auto-trim, si saltano i silenzi lunghi a inizio e fine brano', async ({
+  page,
+  browserName,
+}) => {
+  test.skip(!canDecode, 'Il WebKit di Playwright per Windows non decodifica audio');
+  await register(page, uniqueUser('cltrim', browserName));
+  await page.getByRole('link', { name: 'La tua Libreria' }).click();
+  // 7 s di silenzio, 2 s di tono a 440 Hz, 7 s di silenzio (generato con ffmpeg).
+  await page
+    .getByTestId('file-input')
+    .setInputFiles(path.join(import.meta.dirname, '../fixtures/silence-edges.mp3'));
+  const play = page.getByRole('button', { name: /^Riproduci Silenzio ai bordi/ }).first();
+  await expect(play).toBeEnabled({ timeout: 15_000 });
+  await play.click();
+
+  // Parte poco prima del tono, non da 0:00.
+  await expect.poll(async () => (await audioState(page)).time).toBeGreaterThanOrEqual(6.5);
+  expect((await audioState(page)).time).toBeLessThan(8.5);
+  // A fine tono si ferma (ultimo brano della coda) invece di suonare 7 s di silenzio.
+  await expect.poll(async () => (await audioState(page)).paused, { timeout: 10_000 }).toBe(true);
+  expect((await audioState(page)).time).toBeGreaterThan(8.9);
+  expect((await audioState(page)).time).toBeLessThan(10.5);
 });

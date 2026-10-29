@@ -15,6 +15,7 @@ import type { Clock } from '../clock.js';
 import { HttpError, notFound } from '../http-errors.js';
 import type { TrackService } from '../library/tracks.js';
 import { COVER_SIZES, absMediaPath, audioRelPath, coverRelPath, coverRelPrefix } from '../media/paths.js';
+import type { SilenceAnalyzer } from '../media/silence.js';
 import { writeTags } from '../media/tags.js';
 import { processCover } from './covers.js';
 import type { IngestEvents } from './events.js';
@@ -60,6 +61,8 @@ export interface IngestServiceOptions {
   tracks: TrackService;
   concurrency: number;
   log: FastifyBaseLogger;
+  /** Auto-trim: silenzio ai bordi del brano (ffmpeg). Senza, i brani si riproducono interi. */
+  analyzeSilence?: SilenceAnalyzer;
 }
 
 export class IngestService {
@@ -195,12 +198,56 @@ export class IngestService {
     if (r.changes) this.o.log.info({ jobs: r.changes }, 'job interrotti rimessi in coda');
     this.stopped = false;
     this.pump();
+    const abort = new AbortController();
+    this.backlog = { abort, done: this.analyzeSilenceBacklog(abort.signal).then(() => {}) };
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
+    this.backlog?.abort.abort();
     for (const { abort } of this.running.values()) abort.abort();
     await Promise.allSettled([...this.running.values()].map((r) => r.done));
+    await this.backlog?.done;
+  }
+
+  private backlog: { abort: AbortController; done: Promise<void> } | null = null;
+
+  /**
+   * Auto-trim dei brani mai analizzati (importati prima della funzione o senza ffmpeg):
+   * uno alla volta in background, dai più recenti. Dopo alcuni fallimenti di fila (es.
+   * ffmpeg assente) si ferma e riprova al prossimo avvio. Restituisce i brani analizzati.
+   */
+  async analyzeSilenceBacklog(signal?: AbortSignal): Promise<number> {
+    const analyze = this.o.analyzeSilence;
+    if (!analyze) return 0;
+    const { sqlite, mediaDir } = this.o;
+    const failed: string[] = [];
+    let analyzed = 0;
+    let failures = 0;
+    while (!signal?.aborted && failures < 3) {
+      const row = sqlite
+        .prepare(
+          `SELECT id, audio_path FROM tracks WHERE silence_checked = 0
+           AND id NOT IN (SELECT value FROM json_each(?)) ORDER BY added_at DESC LIMIT 1`,
+        )
+        .get(JSON.stringify(failed)) as { id: string; audio_path: string } | undefined;
+      if (!row) break;
+      const trim = await analyze(absMediaPath(mediaDir, row.audio_path), { signal });
+      if (!trim) {
+        failed.push(row.id);
+        failures++;
+        continue;
+      }
+      failures = 0;
+      analyzed++;
+      sqlite
+        .prepare('UPDATE tracks SET trim_start_ms = ?, trim_end_ms = ?, silence_checked = 1 WHERE id = ?')
+        .run(trim.trimStartMs ?? null, trim.trimEndMs ?? null, row.id);
+    }
+    if (failures >= 3 && !signal?.aborted)
+      this.o.log.warn('auto-trim non disponibile: analisi del silenzio non riuscita (ffmpeg installato?)');
+    if (analyzed) this.o.log.info({ tracks: analyzed }, 'auto-trim: brani analizzati');
+    return analyzed;
   }
 
   /** Attende che non ci siano job in esecuzione (per i test). */
@@ -281,20 +328,25 @@ export class IngestService {
       const { size } = await fs.stat(audioAbs);
 
       const durationMs = Math.round((dl.info.duration ?? 0) * 1000);
+      // Un'analisi non riuscita non blocca l'importazione: il brano resta da analizzare.
+      const trim = this.o.analyzeSilence ? await this.o.analyzeSilence(audioAbs, { signal }) : null;
       const now = this.o.clock.now();
       sqlite.transaction(() => {
         sqlite
           .prepare(
-            `INSERT INTO tracks (id, source, source_id, title, artist, album, duration_ms, size_bytes, dominant_color,
-               audio_path, cover_path, added_by, added_at)
-             VALUES (@id, 'youtube', @sourceId, @title, @artist, @album, @durationMs, @size, @color,
-               @audio, @cover, @addedBy, @now)`,
+            `INSERT INTO tracks (id, source, source_id, title, artist, album, duration_ms, trim_start_ms, trim_end_ms,
+               silence_checked, size_bytes, dominant_color, audio_path, cover_path, added_by, added_at)
+             VALUES (@id, 'youtube', @sourceId, @title, @artist, @album, @durationMs, @trimStart, @trimEnd,
+               @silenceChecked, @size, @color, @audio, @cover, @addedBy, @now)`,
           )
           .run({
             id: trackId,
             sourceId: row.source_id,
             ...meta,
             durationMs,
+            trimStart: trim?.trimStartMs ?? null,
+            trimEnd: trim?.trimEndMs ?? null,
+            silenceChecked: trim ? 1 : 0,
             size,
             color: cover.dominantColor,
             audio,

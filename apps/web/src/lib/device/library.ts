@@ -16,6 +16,7 @@ import {
 import { ApiError } from '../api';
 import type { Db, LocalPlaylistItemRecord, LocalPlaylistRecord, LocalTrackRecord } from '../offline/db';
 import { getSettings, patchSettings } from './settings';
+import { type SilenceAnalyzer, analyzeSilence } from './silence';
 
 /** Cache dei file della modalità client (condivise con il Service Worker, sw.ts). */
 export const DEVICE_AUDIO_CACHE = 'spk-device-audio-v1';
@@ -69,6 +70,8 @@ export interface DeviceLibraryDeps {
   caches?: CacheStorage;
   now?: () => number;
   uuid?: () => string;
+  /** Auto-trim: silenzio ai bordi dei brani (predefinito: decodifica nel browser). */
+  analyzeSilence?: SilenceAnalyzer;
 }
 
 /** Sotto questa distanza fra posizioni vicine si rinumera la playlist (come sul server). */
@@ -129,6 +132,8 @@ export class DeviceLibrary {
       artist: t.artist,
       album: t.album,
       durationMs: t.durationMs,
+      ...(t.trimStartMs ? { trimStartMs: t.trimStartMs } : {}),
+      ...(t.trimEndMs ? { trimEndMs: t.trimEndMs } : {}),
       sizeBytes: t.sizeBytes,
       dominantColor: t.dominantColor,
       addedAt: t.addedAt,
@@ -214,8 +219,11 @@ export class DeviceLibrary {
   async addTrack(n: NewTrack): Promise<TrackDto> {
     await this.ready();
     const id = n.record.id ?? this.uuid();
+    // Auto-trim calcolato qui per ogni provenienza (file, YouTube, ponte); un backup lo porta già.
+    const trim = n.record.silenceChecked ? null : await this.analyze(n.audio);
     const record: LocalTrackRecord = {
       ...n.record,
+      ...(trim ? { ...trim, silenceChecked: true } : {}),
       id,
       addedAt: n.record.addedAt ?? this.now(),
       lost: false,
@@ -244,6 +252,43 @@ export class DeviceLibrary {
     );
     this.changed();
     return this.toDto(record);
+  }
+
+  private analyze(audio: Blob) {
+    return (this.deps.analyzeSilence ?? analyzeSilence)(audio).catch(() => null);
+  }
+
+  /**
+   * Auto-trim dei brani mai analizzati (importati prima della funzione o in un browser che
+   * non li decodificava): uno alla volta, dai più recenti. Restituisce i brani analizzati.
+   */
+  async analyzeSilenceBacklog(signal?: AbortSignal): Promise<number> {
+    await this.ready();
+    const pending = [...this.tracks.values()]
+      .filter((t) => !t.silenceChecked && !t.lost)
+      .sort((a, b) => b.addedAt - a.addedAt);
+    let analyzed = 0;
+    let failures = 0;
+    const audioCache = await this.caches.open(DEVICE_AUDIO_CACHE);
+    for (const t of pending) {
+      if (signal?.aborted || failures >= 3) break;
+      const res = await audioCache.match(absolute(localAudioUrl(t.id)));
+      const trim = res ? await this.analyze(await res.blob()) : null;
+      if (!trim) {
+        failures++;
+        continue;
+      }
+      failures = 0;
+      const current = this.tracks.get(t.id);
+      if (!current) continue;
+      const { trimStartMs: _s, trimEndMs: _e, ...rest } = current;
+      const record: LocalTrackRecord = { ...rest, ...trim, silenceChecked: true };
+      await (await this.deps.db()).put('libTracks', record);
+      this.tracks.set(t.id, record);
+      analyzed++;
+    }
+    if (analyzed) this.changed();
+    return analyzed;
   }
 
   private async deleteFiles(id: string): Promise<void> {

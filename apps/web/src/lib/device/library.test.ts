@@ -198,3 +198,69 @@ describe('eliminazione da parte del sistema', () => {
     expect(lib.isLocal(a.id)).toBe(true);
   });
 });
+
+describe('auto-trim del silenzio', () => {
+  async function makeAnalyzed(
+    analyze: (b: Blob) => Promise<{ trimStartMs?: number; trimEndMs?: number } | null>,
+  ) {
+    const db = await openSpookyfyDb(`spk-lib-trim-${Date.now()}-${++n}`);
+    let t = 1_000;
+    const lib = new DeviceLibrary({ db: async () => db, now: () => ++t, analyzeSilence: analyze });
+    await lib.ready();
+    return { lib, db };
+  }
+
+  test('all’aggiunta il brano riceve i punti di trim, che restano dopo la riapertura', async () => {
+    const analyze = vi.fn(async () => ({ trimStartMs: 6750, trimEndMs: 170_250 }));
+    const { lib, db } = await makeAnalyzed(analyze);
+    const dto = await add(lib, { title: 'Con silenzio', size: 321 });
+    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({ size: 321 }));
+    expect(dto).toMatchObject({ trimStartMs: 6750, trimEndMs: 170_250 });
+    const reopened = new DeviceLibrary({ db: async () => db, analyzeSilence: analyze });
+    expect((await reopened.list({})).items[0]).toMatchObject({ trimStartMs: 6750, trimEndMs: 170_250 });
+  });
+
+  test('analisi non riuscita: il brano si aggiunge intero e viene ripreso in background', async () => {
+    let result: { trimStartMs?: number } | null = null;
+    const { lib } = await makeAnalyzed(async () => result);
+    const dto = await add(lib, { title: 'Da analizzare' });
+    expect(dto).not.toHaveProperty('trimStartMs');
+    result = { trimStartMs: 8000 };
+    expect(await lib.analyzeSilenceBacklog()).toBe(1);
+    expect(lib.toDto(lib.record(dto.id)!)).toMatchObject({ trimStartMs: 8000 });
+    expect(await lib.analyzeSilenceBacklog()).toBe(0);
+  });
+
+  test('un brano già analizzato (es. da backup) non si rianalizza', async () => {
+    const analyze = vi.fn(async () => ({}));
+    const { lib } = await makeAnalyzed(analyze);
+    const dto = await lib.addTrack({
+      record: {
+        sourceKey: 'file:abc',
+        title: 'Dal backup',
+        artist: 'A',
+        album: null,
+        durationMs: 180_000,
+        trimEndMs: 150_000,
+        silenceChecked: true,
+        sizeBytes: 10,
+        mimeType: 'audio/mpeg',
+        dominantColor: '#c02020',
+      },
+      audio: blob(10),
+      cover512: blob(1),
+      cover128: blob(1),
+    });
+    expect(analyze).not.toHaveBeenCalled();
+    expect(dto.trimEndMs).toBe(150_000);
+  });
+
+  test('il backlog legge l’audio dal dispositivo e si ferma dopo 3 fallimenti di fila', async () => {
+    const analyze = vi.fn(async () => null);
+    const { lib } = await makeAnalyzed(analyze);
+    for (let i = 0; i < 5; i++) await add(lib, { title: `T${i}`, key: `file:${i}` });
+    analyze.mockClear();
+    expect(await lib.analyzeSilenceBacklog()).toBe(0);
+    expect(analyze).toHaveBeenCalledTimes(3);
+  });
+});

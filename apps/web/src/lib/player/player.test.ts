@@ -103,6 +103,89 @@ describe('motore audio', () => {
   });
 });
 
+describe('auto-trim del silenzio', () => {
+  const playing = () => Object.defineProperty(audio, 'paused', { value: false, configurable: true });
+  const loaded = (duration = 200) => {
+    Object.defineProperty(audio, 'duration', { value: duration, configurable: true });
+    audio.dispatchEvent(new Event('loadedmetadata'));
+  };
+
+  test('la riproduzione parte dopo il silenzio iniziale e la durata si ferma al punto di fine', () => {
+    const t = makeTrack({ durationMs: 200_000, trimStartMs: 7000, trimEndMs: 170_000 });
+    s.player.playTracks([t], 0);
+    expect(s.player.position).toBe(7);
+    expect(s.player.duration).toBe(170);
+    loaded();
+    expect(audio.currentTime).toBe(7);
+    expect(s.player.duration).toBe(170);
+  });
+
+  test('al silenzio finale si passa al brano successivo', () => {
+    const [a, b] = [makeTrack({ trimEndMs: 170_000 }), makeTrack()];
+    s.player.playTracks([a, b], 0);
+    playing();
+    setTime(169.5);
+    expect(s.player.current?.id).toBe(a.id);
+    setTime(170.1);
+    expect(s.player.current?.id).toBe(b.id);
+    expect(audio.getAttribute('src')).toBe(b.audioUrl);
+  });
+
+  test('ultimo brano della coda: al silenzio finale l’audio si ferma', () => {
+    const t = makeTrack({ trimEndMs: 170_000 });
+    const pause = vi.spyOn(audio, 'pause');
+    s.player.playTracks([t], 0);
+    playing();
+    setTime(170.1);
+    expect(pause).toHaveBeenCalled();
+    expect(s.player.playing).toBe(false);
+  });
+
+  test('in pausa nel silenzio finale non si salta (es. dopo uno spostamento manuale)', () => {
+    const [a, b] = [makeTrack({ trimEndMs: 170_000 }), makeTrack()];
+    s.player.playTracks([a, b], 0);
+    Object.defineProperty(audio, 'paused', { value: true, configurable: true });
+    setTime(175);
+    expect(s.player.current?.id).toBe(a.id);
+  });
+
+  test('ripeti brano riparte dopo il silenzio iniziale', () => {
+    const t = makeTrack({ trimStartMs: 7000, trimEndMs: 170_000 });
+    s.player.playTracks([t], 0);
+    s.player.cycleRepeat(); // all
+    s.player.cycleRepeat(); // one
+    playing();
+    setTime(170.2);
+    expect(s.player.current?.id).toBe(t.id);
+    expect(audio.currentTime).toBe(7);
+  });
+
+  test('"Precedente" conta i secondi dall’inizio della musica', () => {
+    const [a, b] = [makeTrack(), makeTrack({ trimStartMs: 7000 })];
+    s.player.playTracks([a, b], 1);
+    setTime(9); // 2 s di musica: torna al brano prima
+    s.player.previous();
+    expect(s.player.current?.id).toBe(a.id);
+
+    s.player.playTracks([a, b], 1);
+    setTime(40);
+    s.player.previous(); // riparte dall'inizio della musica, non dal silenzio
+    expect(s.player.current?.id).toBe(b.id);
+    expect(audio.currentTime).toBe(7);
+  });
+
+  test('senza punti di trim il brano si riproduce intero', () => {
+    const [a, b] = [makeTrack(), makeTrack()];
+    s.player.playTracks([a, b], 0);
+    playing();
+    loaded(180);
+    expect(audio.currentTime).toBe(0);
+    setTime(179.9);
+    expect(s.player.current?.id).toBe(a.id);
+    expect(s.player.duration).toBe(180);
+  });
+});
+
 describe('MediaSession', () => {
   test('metadati, posizione e comandi di sistema', async () => {
     const [a, b] = [makeTrack({ title: 'Uno', artist: 'X', album: 'Disco' }), makeTrack({ title: 'Due' })];

@@ -125,6 +125,15 @@ Nella dashboard di Cloudflare aggiungi una **Cache Rule** con *Bypass cache* per
 
 SQLite in modalità WAL regge senza problemi l'uso previsto (pochi utenti, migliaia di brani) su ogni profilo. Lo spazio su disco è la risorsa principale: un brano MP3 occupa in media 4–10 MB.
 
+## Auto-trim del silenzio
+
+Se un brano ha **più di 5 secondi di silenzio** all'inizio o alla fine (sotto −50 dBFS), il player li salta: parte poco prima del primo suono e passa al brano successivo poco dopo l'ultimo (margine di 0,25 s). Le pause a metà brano non si toccano. Il file audio resta intero: si salvano solo i punti di inizio e fine.
+
+- **On-premise**: l'analisi la fa `ffmpeg` (filtro `silencedetect`) durante l'importazione. All'avvio il server analizza in background, uno alla volta e con la priorità di `INGEST_NICE`, i brani importati prima della funzione. Se `ffmpeg` manca i brani si riproducono interi e il log lo segnala.
+- **Modalità client**: l'analisi la fa il browser del telefono all'importazione (da YouTube, da file o dal ponte); i brani già presenti vengono analizzati qualche secondo dopo l'apertura dell'app. I punti di trim viaggiano nel backup.
+
+Regole e soglie: `packages/shared/src/silence.ts`.
+
 ## Installare l'app sul telefono
 
 - **iPhone (Safari)**: apri `https://spookyfy.example.com`, tocca *Condividi* → *Aggiungi a schermata Home*. Apri Spookyfy dall'icona: solo l'app installata ottiene lo storage persistente e i controlli in lockscreen come un'app nativa. La prima riproduzione parte toccando Play.

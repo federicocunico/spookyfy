@@ -339,3 +339,67 @@ describe('canale in tempo reale', () => {
     await expect(connect(url, { cookie, origin: 'https://evil.example' })).rejects.toThrow('HTTP 403');
   });
 });
+
+describe('auto-trim del silenzio', () => {
+  const trimmed = { trimStartMs: 6750, trimEndMs: 2750 };
+
+  test('i punti di trim calcolati all’importazione arrivano ai client', async () => {
+    const analyze = vi.fn(async () => trimmed);
+    await setup({ buildOptions: { analyzeSilence: analyze } });
+    await ingest('abcdefghijk');
+    await ctx.app.ingest.idle();
+    expect(analyze).toHaveBeenCalledTimes(1);
+    const [track] = (await api.get('/api/tracks')).json().items as TrackDto[];
+    expect(track).toMatchObject(trimmed);
+    const row = ctx.database.sqlite.prepare('SELECT silence_checked FROM tracks').get();
+    expect(row).toEqual({ silence_checked: 1 });
+  });
+
+  test('senza silenzio da saltare i campi restano assenti', async () => {
+    await setup({ buildOptions: { analyzeSilence: async () => ({}) } });
+    await ingest('abcdefghijk');
+    await ctx.app.ingest.idle();
+    const [track] = (await api.get('/api/tracks')).json().items as TrackDto[];
+    expect(track).not.toHaveProperty('trimStartMs');
+    expect(track).not.toHaveProperty('trimEndMs');
+  });
+
+  test('analisi non riuscita: il brano si importa comunque e resta da analizzare', async () => {
+    await setup({ buildOptions: { analyzeSilence: async () => null } });
+    await ingest('abcdefghijk');
+    await ctx.app.ingest.idle();
+    expect((await api.get('/api/tracks')).json().items).toHaveLength(1);
+    const row = ctx.database.sqlite.prepare('SELECT silence_checked FROM tracks').get();
+    expect(row).toEqual({ silence_checked: 0 });
+  });
+
+  test('i brani già in libreria vengono analizzati in background, dai più recenti', async () => {
+    const seen: string[] = [];
+    const analyze = vi.fn(async (file: string) => {
+      seen.push(file);
+      return trimmed;
+    });
+    await setup({ buildOptions: { analyzeSilence: analyze, startIngestWorker: false } });
+    const old = await insertTrack(ctx, { addedAt: 1 });
+    const recent = await insertTrack(ctx, { addedAt: 2 });
+    expect(await ctx.app.ingest.analyzeSilenceBacklog()).toBe(2);
+    expect(seen[0]).toContain(recent.id);
+    expect(seen[1]).toContain(old.id);
+    const items = (await api.get('/api/tracks')).json().items as TrackDto[];
+    for (const t of items) expect(t).toMatchObject(trimmed);
+    // Già analizzati: al giro successivo non c'è altro da fare.
+    expect(await ctx.app.ingest.analyzeSilenceBacklog()).toBe(0);
+  });
+
+  test('ffmpeg assente: ci si ferma dopo pochi tentativi, senza marcare i brani', async () => {
+    const analyze = vi.fn(async () => null);
+    await setup({ buildOptions: { analyzeSilence: analyze, startIngestWorker: false } });
+    for (let i = 0; i < 5; i++) await insertTrack(ctx, { addedAt: i });
+    expect(await ctx.app.ingest.analyzeSilenceBacklog()).toBe(0);
+    expect(analyze).toHaveBeenCalledTimes(3);
+    const row = ctx.database.sqlite
+      .prepare('SELECT count(*) AS n FROM tracks WHERE silence_checked = 0')
+      .get();
+    expect(row).toEqual({ n: 5 });
+  });
+});

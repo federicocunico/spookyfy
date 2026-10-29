@@ -36,6 +36,7 @@ Vercel       telefono (PWA + libreria nel browser) ──▶ gateway: login, ric
 
 1. **Cerca** → **Aggiungi**: il brano viene importato e si ascolta subito.
 2. La PWA lo salva per l'offline (on-premise: con il tasto download; Vercel: sempre).
+   Più di 5 secondi di silenzio all'inizio o alla fine del brano vengono saltati (auto-trim).
 3. Per registrarsi serve un token di invito (default `spotifymerdacostosa2026`, **cambialo**); password di almeno 8 caratteri con lettere, cifre e un simbolo.
 
 ## Installazione su Vercel

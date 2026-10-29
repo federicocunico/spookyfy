@@ -20,6 +20,8 @@ export interface TrackRow {
   artist: string;
   album: string | null;
   duration_ms: number;
+  trim_start_ms: number | null;
+  trim_end_ms: number | null;
   size_bytes: number;
   dominant_color: string;
   audio_path: string;
@@ -32,7 +34,8 @@ export interface TrackRow {
 
 /** Colonne del brano più i dati personali dell'utente `@userId`. */
 export const TRACK_SELECT = `
-  t.id, t.source_id, t.title, t.artist, t.album, t.duration_ms, t.size_bytes, t.dominant_color,
+  t.id, t.source_id, t.title, t.artist, t.album, t.duration_ms, t.trim_start_ms, t.trim_end_ms,
+  t.size_bytes, t.dominant_color,
   t.audio_path, t.cover_path, t.added_at,
   EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = @userId AND f.track_id = t.id) AS is_favorite,
   (SELECT count(*) FROM plays p WHERE p.user_id = @userId AND p.track_id = t.id) AS play_count,
@@ -46,6 +49,8 @@ export function toTrackDto(r: TrackRow): TrackDto {
     artist: r.artist,
     album: r.album,
     durationMs: r.duration_ms,
+    ...(r.trim_start_ms ? { trimStartMs: r.trim_start_ms } : {}),
+    ...(r.trim_end_ms ? { trimEndMs: r.trim_end_ms } : {}),
     sizeBytes: r.size_bytes,
     dominantColor: r.dominant_color,
     addedAt: r.added_at,

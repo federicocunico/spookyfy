@@ -37,6 +37,11 @@ export interface LocalTrackRecord {
   artist: string;
   album: string | null;
   durationMs: number;
+  /** Auto-trim (vedi @spookyfy/shared, silence.ts): assenti = brano riprodotto per intero. */
+  trimStartMs?: number;
+  trimEndMs?: number;
+  /** Silenzio ai bordi già analizzato; i brani senza vengono analizzati in background. */
+  silenceChecked?: boolean;
   sizeBytes: number;
   mimeType: string;
   dominantColor: string;

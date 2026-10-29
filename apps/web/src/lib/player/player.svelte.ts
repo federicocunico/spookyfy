@@ -23,6 +23,14 @@ import {
 export const PLAYER_STORAGE_KEY = 'spk-player';
 const PERSIST_INTERVAL_MS = 5000;
 
+// Auto-trim (vedi @spookyfy/shared, silence.ts): il silenzio ai bordi si salta, il file resta intero.
+/** Secondi da cui parte la riproduzione. */
+const trimStart = (t: TrackDto) => (t.trimStartMs ?? 0) / 1000;
+/** Secondi in cui la riproduzione finisce, se prima della fine del file. */
+const trimEnd = (t: TrackDto) => (t.trimEndMs ? t.trimEndMs / 1000 : null);
+/** Durata mostrata: fino al punto di fine (la barra parte comunque da 0:00). */
+const playableDuration = (t: TrackDto) => (t.trimEndMs ?? t.durationMs) / 1000;
+
 interface Persisted {
   queue: QueueState;
   tracks: Record<string, TrackDto>;
@@ -170,9 +178,11 @@ export class Player {
 
   previous(): void {
     if (!this.queue || !this.audio) return;
-    const step = previous(this.queue, this.needsLoad ? this.position : this.audio.currentTime);
+    // «Precedente» guarda quanto si è ascoltato dall'inizio della musica, non del file.
+    const start = this.current ? trimStart(this.current) : 0;
+    const step = previous(this.queue, (this.needsLoad ? this.position : this.audio.currentTime) - start);
     if (step.restart) {
-      this.seek(0);
+      this.seek(start);
       if (this.audio.paused) this.resume();
       return;
     }
@@ -196,7 +206,7 @@ export class Player {
       this.queue = createQueue([track.id], 0);
       this.needsLoad = true;
       this.position = 0;
-      this.duration = track.durationMs / 1000;
+      this.duration = playableDuration(track);
     } else {
       this.queue = playNext(this.queue, track.id);
     }
@@ -283,7 +293,7 @@ export class Player {
         return false;
       }
       this.position = saved.position ?? 0;
-      this.duration = cur.durationMs / 1000;
+      this.duration = playableDuration(cur);
       this.needsLoad = true;
       this.playing = false;
       return true;
@@ -328,9 +338,10 @@ export class Player {
       return;
     }
     this.needsLoad = false;
-    this.pendingSeek = startAt > 0 ? startAt : null;
-    this.position = startAt;
-    this.duration = track.durationMs / 1000;
+    const from = Math.max(startAt, trimStart(track));
+    this.pendingSeek = from > 0 ? from : null;
+    this.position = from;
+    this.duration = playableDuration(track);
     this.deps.mediaSession.setTrack(track);
     this.tracker.start(track.id, track.durationMs);
     this.persist(true);
@@ -406,13 +417,21 @@ export class Player {
     if (!a || this.needsLoad) return;
     this.position = a.currentTime;
     if (!a.paused) this.tracker.tick(a.currentTime);
+    // Silenzio finale: si passa al brano successivo come a fine file.
+    const end = this.current ? trimEnd(this.current) : null;
+    if (end !== null && !a.paused && a.currentTime >= end) {
+      this.onEnded();
+      return;
+    }
     this.persist();
   };
 
   private onLoadedMetadata = () => {
     const a = this.audio;
     if (!a) return;
-    if (Number.isFinite(a.duration) && a.duration > 0) this.duration = a.duration;
+    const end = this.current ? trimEnd(this.current) : null;
+    if (Number.isFinite(a.duration) && a.duration > 0)
+      this.duration = Math.min(a.duration, end ?? a.duration);
     if (this.pendingSeek !== null) {
       a.currentTime = this.pendingSeek;
       this.pendingSeek = null;
@@ -433,6 +452,8 @@ export class Player {
     if (!this.queue || !this.audio) return;
     const step = next(this.queue, { auto: true });
     if (!step.play) {
+      // Fine della coda; con l'auto-trim l'audio sta ancora suonando il silenzio finale.
+      this.audio.pause();
       this.playing = false;
       this.persist(true);
       return;
@@ -441,7 +462,7 @@ export class Player {
       // Ripeti brano: nuova riproduzione dello stesso elemento.
       const t = this.current!;
       this.tracker.start(t.id, t.durationMs);
-      this.audio.currentTime = 0;
+      this.audio.currentTime = trimStart(t);
       void this.audio.play().catch(() => {});
       return;
     }
