@@ -43,7 +43,9 @@ pnpm verify:prod:ui                                       # browser; altro URL c
 **`pnpm verify:prod`** (`apps/gateway/scripts/verify-deploy.ts`) controlla:
 - **App**: pagina iniziale, percorsi profondi (`/login`, `/register`, `/settings`), script con cache immutabile, manifest, service worker;
 - **API**: `/api/health` in modalità client, `401` senza sessione, `404` JSON per un'azione inesistente, `403 FORBIDDEN_ORIGIN` da un sito terzo e senza `Origin`, `400` con errori per campo, `401` con credenziali errate;
-- **Account di prova** (solo con `VERIFY_REGISTRATION_TOKEN`): token errato `403`, registrazione con il token seguito da spazi `201`, cookie `HttpOnly`/`Secure`/`SameSite=Lax`, `me`, username duplicato `409`, ricerca su YouTube, metadati (se YouTube li blocca è un avviso, non un errore), logout con revoca della sessione, nuovo login. Alla fine l'account `verify-…` viene eliminato da Redis.
+- **Account di prova** (solo con `VERIFY_REGISTRATION_TOKEN`): registrazione con il token seguito da spazi `201`, cookie `HttpOnly`/`Secure`/`SameSite=Lax`, `me`, username duplicato `409`, ricerca su YouTube, metadati (se YouTube li blocca è un avviso, non un errore), logout con revoca della sessione, nuovo login e, per ultimo, token errato `403`. Alla fine l'account `verify-…` viene eliminato da Redis.
+
+Il token errato conta come tentativo fallito: dallo stesso IP si possono fare circa **5 verifiche ogni 15 minuti**, poi le registrazioni rispondono `429` finché la finestra non scade.
 
 **`pnpm verify:prod:ui`** (`e2e/remote/registration.spec.ts`) fa lo stesso percorso dall'interfaccia, con iPhone 14 (WebKit) e Pixel 7 (Chromium): crea l'account, ricarica, cerca, esce e rientra. Gli account `verify-ui-…` vengono eliminati con la CLI del gateway.
 

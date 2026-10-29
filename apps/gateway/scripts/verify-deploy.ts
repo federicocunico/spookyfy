@@ -96,7 +96,13 @@ function expectStatus(r: Res, status: number, code?: string) {
           : ''),
     );
   }
-  assert(r.status === status, `atteso HTTP ${status}${code ? ` ${code}` : ''}, ricevuto ${got}`);
+  assert(
+    r.status === status,
+    `atteso HTTP ${status}${code ? ` ${code}` : ''}, ricevuto ${got}` +
+      (r.status === 429
+        ? '\n(limite anti-tentativi per questo IP: ogni verifica ne usa uno, aspetta e riprova)'
+        : ''),
+  );
   if (code) assert(r.json?.error?.code === code, `atteso codice ${code}, ricevuto ${got}`);
 }
 
@@ -188,12 +194,6 @@ if (!token) {
   let created = false;
   let cookie = '';
 
-  await check('token di invito errato → 403 INVALID_REGISTRATION_TOKEN', async () => {
-    const r = await http('POST', '/api/auth/register', {
-      body: { username, password, token: `${token}-sbagliato` },
-    });
-    expectStatus(r, 403, 'INVALID_REGISTRATION_TOKEN');
-  });
   const ok = await check(
     `registrazione di ${username} (token con spazi, come da tastiera) → 201`,
     async () => {
@@ -254,6 +254,13 @@ if (!token) {
       });
       expectStatus(r, 200);
       sessionCookie(r);
+    });
+    // Per ultimo: conta come tentativo fallito (5 ogni 15 minuti per IP).
+    await check('token di invito errato → 403 INVALID_REGISTRATION_TOKEN', async () => {
+      const r = await http('POST', '/api/auth/register', {
+        body: { username: `${username}-x`, password, token: `${token}-sbagliato` },
+      });
+      expectStatus(r, 403, 'INVALID_REGISTRATION_TOKEN');
     });
   }
 
