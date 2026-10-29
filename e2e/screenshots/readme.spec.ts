@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { type Page, expect, test } from '@playwright/test';
+import { type Page, devices, expect, test } from '@playwright/test';
 import { CLIENT_URL } from '../playwright.config';
 import { ensureServiceWorker, importFromSearch, register, uniqueUser } from '../tests/helpers';
 
@@ -43,6 +43,31 @@ test('on-premise', async ({ page }) => {
   await expect(page.getByTestId('full-player')).toBeVisible();
   await page.evaluate(() => document.querySelector('audio')?.pause());
   await shot(page, 'player');
+});
+
+test.describe('PC', () => {
+  test.use({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 1,
+    isMobile: false,
+    hasTouch: false,
+    userAgent: devices['Desktop Chrome'].userAgent,
+  });
+
+  test('home con colonna di navigazione e barra del player', async ({ page }) => {
+    await register(page, uniqueUser('demo', 'desktop'));
+    await ensureServiceWorker(page);
+    for (const i of [0, 1, 2]) await importFromSearch(page, 'come as you are', i);
+    await page
+      .getByTestId('remote-result')
+      .first()
+      .getByRole('button', { name: /^Riproduci/ })
+      .click();
+    await expect(page.getByTestId('mini-player')).toBeVisible();
+    await page.evaluate(() => document.querySelector('audio')?.pause());
+    await page.getByRole('link', { name: 'Home' }).click();
+    await shot(page, 'desktop');
+  });
 });
 
 test.describe('modalità client', () => {

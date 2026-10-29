@@ -23,6 +23,8 @@ Player musicale personale: una **PWA** per iPhone e Android (audio in background
   </tr>
 </table>
 
+<img src="docs/screenshots/desktop.png" width="560" alt="Su PC: navigazione a sinistra e barra del player in basso">
+
 <sub>Screenshot con dati di prova, rigenerabili con `pnpm screenshots`.</sub>
 
 ## Come funziona
