@@ -174,7 +174,7 @@ async function searchBridge() {
     font-weight: 600;
   }
   .search .input::placeholder {
-    color: #555;
+    color: #5c5670;
   }
   .none,
   .hint {

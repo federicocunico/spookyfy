@@ -7,8 +7,8 @@ import sharp from 'sharp';
 const out = path.resolve(import.meta.dirname, '../public/icons');
 fs.mkdirSync(out, { recursive: true });
 
-const BG = '#121212';
-const ACCENT = '#FF5F1F';
+const BG = '#0B0A10';
+const ACCENT = '#B69CFF';
 const ghost = (fill) => `
   <path fill="${fill}" d="M120 236 C120 156 176 96 256 96 C336 96 392 156 392 236 V400 L358 372 L324 400 L290 372
     L256 400 L222 372 L188 400 L154 372 L120 400 Z"/>

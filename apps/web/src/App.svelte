@@ -112,6 +112,10 @@ $effect(() => {
 <UpdatePrompt update={pwa.update} />
 
 <style>
+  /* Su PC lascia spazio alla colonna di navigazione (vedi --sidebar-w in app.css). */
+  main {
+    padding-left: var(--sidebar-w);
+  }
   .splash {
     min-height: 100dvh;
     display: grid;

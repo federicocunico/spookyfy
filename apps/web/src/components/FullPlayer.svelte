@@ -238,6 +238,12 @@ async function toggleFavorite() {
     display: flex;
     justify-content: space-between;
   }
+  /* Su PC i comandi restano in una colonna centrale invece di allargarsi a tutto lo schermo. */
+  @media (min-width: 1024px) {
+    .full {
+      padding-inline: max(var(--space-5), calc(50% - 300px));
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     .full {
       animation: none;

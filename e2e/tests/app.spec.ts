@@ -187,8 +187,8 @@ test('PWA installabile (criteri di Chrome) con manifest completo', async ({ page
   expect(manifest).toMatchObject({
     name: 'Spookyfy',
     display: 'standalone',
-    background_color: '#121212',
-    theme_color: '#121212',
+    background_color: '#0b0a10',
+    theme_color: '#0b0a10',
   });
   expect(manifest.icons.map((i: { purpose: string }) => i.purpose)).toContain('maskable');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute(
@@ -235,7 +235,7 @@ test('la tab bar rispetta l’area sicura dell’iPhone (indicatore Home)', asyn
   await page.getByRole('link', { name: 'Cerca' }).click();
   await expect(page.getByRole('link', { name: 'Cerca' })).toHaveAttribute('aria-current', 'page');
   const color = await page.getByRole('link', { name: 'Cerca' }).evaluate((el) => getComputedStyle(el).color);
-  expect(color).toBe('rgb(255, 95, 31)');
+  expect(color).toBe('rgb(245, 243, 250)');
   const blur = await page
     .getByRole('navigation', { name: 'Navigazione principale' })
     .evaluate(
@@ -244,4 +244,22 @@ test('la tab bar rispetta l’area sicura dell’iPhone (indicatore Home)', asyn
         getComputedStyle(el).getPropertyValue('-webkit-backdrop-filter'),
     );
   expect(blur).toContain('blur(10px)');
+});
+
+test('su PC la navigazione è una colonna a sinistra e il contenuto non ci finisce sotto', async ({
+  page,
+  browserName,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await register(page, uniqueUser('desk', browserName));
+  const nav = (await page.getByRole('navigation', { name: 'Navigazione principale' }).boundingBox())!;
+  expect(nav.x).toBeLessThan(16);
+  expect(nav.height).toBeGreaterThan(400);
+  const title = (await page.getByRole('heading', { level: 1 }).first().boundingBox())!;
+  expect(title.x).toBeGreaterThanOrEqual(nav.x + nav.width);
+  for (const name of ['Home', 'Cerca', 'La tua Libreria']) {
+    const tab = (await page.getByRole('link', { name }).boundingBox())!;
+    expect(tab.x + tab.width).toBeLessThanOrEqual(nav.x + nav.width);
+    expect(tab.height).toBeGreaterThanOrEqual(44);
+  }
 });

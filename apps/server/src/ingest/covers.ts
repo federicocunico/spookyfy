@@ -17,7 +17,7 @@ export const rgbToHex = (r: number, g: number, b: number) => `#${toHex(r)}${toHe
 function placeholder(): sharp.Sharp {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff5f1f"/><stop offset="1" stop-color="#282828"/></linearGradient></defs>
+      <stop offset="0" stop-color="#b69cff"/><stop offset="1" stop-color="#262233"/></linearGradient></defs>
     <rect width="512" height="512" fill="url(#g)"/></svg>`;
   return sharp(Buffer.from(svg));
 }

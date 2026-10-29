@@ -22,7 +22,7 @@ const items = $derived(tracks?.map((t) => ({ key: t.id, track: t })) ?? null);
 <TrackCollection
   title="Scaricati"
   kind="Sul dispositivo"
-  tint="#1f5b3a"
+  tint="#24564f"
   {items}
   context="downloaded"
   emptyText="Nessun brano scaricato. Usa l'icona a nuvola per ascoltare anche offline."
@@ -38,6 +38,7 @@ const items = $derived(tracks?.map((t) => ({ key: t.id, track: t })) ?? null);
     display: grid;
     place-items: center;
     border-radius: var(--radius-s);
-    background: linear-gradient(135deg, #1f8a52, #12301f);
+    background: var(--downloaded);
+    color: var(--accent-ink);
   }
 </style>

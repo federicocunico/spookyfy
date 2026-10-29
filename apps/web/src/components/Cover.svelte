@@ -5,7 +5,7 @@
  */
 let {
   src,
-  color = '#282828',
+  color = '#262233',
   size,
   radius = 'var(--radius-s)',
   alt = '',

@@ -52,8 +52,8 @@ async function toJpeg(c: HTMLCanvasElement | OffscreenCanvas, quality = 0.86): P
 
 function drawPlaceholder(ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D, size: number) {
   const g = ctx.createLinearGradient(0, 0, size, size);
-  g.addColorStop(0, '#ff5f1f');
-  g.addColorStop(1, '#282828');
+  g.addColorStop(0, '#b69cff');
+  g.addColorStop(1, '#262233');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
 }

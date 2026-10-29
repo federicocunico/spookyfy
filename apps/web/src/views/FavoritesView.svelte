@@ -15,7 +15,7 @@ const items = $derived(library.favorites?.map((f) => ({ key: f.track.id, track: 
 
 <TrackCollection
   title="Brani che ti piacciono"
-  tint="#5b2a86"
+  tint="#4a3a80"
   {items}
   context="favorites"
   emptyText="Tocca il cuore su un brano per aggiungerlo qui."
@@ -31,6 +31,7 @@ const items = $derived(library.favorites?.map((f) => ({ key: f.track.id, track: 
     display: grid;
     place-items: center;
     border-radius: var(--radius-s);
-    background: linear-gradient(135deg, var(--accent), #6a1fb0);
+    background: var(--accent);
+    color: var(--accent-ink);
   }
 </style>

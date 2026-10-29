@@ -205,7 +205,8 @@ function go(e: MouseEvent, path: string) {
     height: 64px;
     flex: none;
     border-radius: var(--radius-s);
-    background: linear-gradient(135deg, var(--accent), #6a1fb0);
+    background: var(--accent);
+    color: var(--accent-ink);
   }
   .names {
     min-width: 0;

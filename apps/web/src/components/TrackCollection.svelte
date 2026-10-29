@@ -16,7 +16,7 @@ interface CollectionItem {
 let {
   title,
   kind = 'Playlist',
-  tint = '#3a3a3a',
+  tint = '#3b2d5c',
   cover,
   items,
   context,

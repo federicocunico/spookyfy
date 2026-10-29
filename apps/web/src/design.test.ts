@@ -23,10 +23,10 @@ function contrast(a: string, b: string): number {
 }
 
 test('palette Spookyfy', () => {
-  expect(token('bg').toLowerCase()).toBe('#121212');
-  expect(token('surface-1').toLowerCase()).toBe('#181818');
-  expect(token('surface-3').toLowerCase()).toBe('#282828');
-  expect(token('accent').toLowerCase()).toBe('#ff5f1f');
+  expect(token('bg').toLowerCase()).toBe('#0b0a10');
+  expect(token('surface-1').toLowerCase()).toBe('#14121b');
+  expect(token('surface-3').toLowerCase()).toBe('#262233');
+  expect(token('accent').toLowerCase()).toBe('#b69cff');
 });
 
 test.each(['text', 'text-2', 'text-3'])('contrasto di --%s su sfondo e superfici ≥ 4.5:1', (name) => {
@@ -37,4 +37,17 @@ test.each(['text', 'text-2', 'text-3'])('contrasto di --%s su sfondo e superfici
 
 test('testo sui bottoni in accento leggibile', () => {
   expect(contrast(token('accent-ink'), token('accent'))).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(token('accent-ink'), token('downloaded'))).toBeGreaterThanOrEqual(4.5);
+});
+
+test('accento leggibile come testo su sfondo e superfici', () => {
+  for (const bg of ['bg', 'surface-1', 'surface-3']) {
+    expect(contrast(token('accent'), token(bg))).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+test('errore leggibile su sfondo e superfici', () => {
+  for (const bg of ['bg', 'surface-1', 'surface-3']) {
+    expect(contrast(token('danger'), token(bg))).toBeGreaterThanOrEqual(4.5);
+  }
 });

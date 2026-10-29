@@ -41,8 +41,8 @@ const { toasts, player } = services();
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-m);
-    background: #f5f5f5;
-    color: #121212;
+    background: #f5f3fa;
+    color: #0b0a10;
     font-size: var(--fs-s);
     font-weight: 600;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -54,7 +54,7 @@ const { toasts, player } = services();
   }
   button {
     font-weight: 800;
-    color: #121212;
+    color: #0b0a10;
   }
   @keyframes pop {
     from {
