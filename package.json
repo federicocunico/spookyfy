@@ -12,6 +12,8 @@
     "build": "pnpm build:shared && pnpm --filter @spookyfy/web build && pnpm --filter @spookyfy/server build",
     "test": "pnpm build:shared && pnpm -r --filter=!@spookyfy/e2e test",
     "test:e2e": "pnpm build && pnpm --filter @spookyfy/e2e test",
+    "verify:prod": "pnpm --filter @spookyfy/gateway verify",
+    "verify:prod:ui": "pnpm --filter @spookyfy/e2e verify:prod",
     "screenshots": "pnpm build && pnpm --filter @spookyfy/e2e screenshots",
     "typecheck": "pnpm build:shared && pnpm -r typecheck",
     "lint": "biome check .",

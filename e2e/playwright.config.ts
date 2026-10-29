@@ -29,16 +29,25 @@ export default defineConfig({
     serviceWorkers: 'allow',
   },
   projects: [
-    { name: 'chromium', testMatch: /app\.spec\.ts/, use: { ...devices['Pixel 7'], baseURL: BASE_URL } },
-    { name: 'webkit', testMatch: /app\.spec\.ts/, use: { ...devices['iPhone 14'], baseURL: BASE_URL } },
+    // auth.spec.ts gira in entrambe le modalità.
+    {
+      name: 'chromium',
+      testMatch: /(app|auth)\.spec\.ts/,
+      use: { ...devices['Pixel 7'], baseURL: BASE_URL },
+    },
+    {
+      name: 'webkit',
+      testMatch: /(app|auth)\.spec\.ts/,
+      use: { ...devices['iPhone 14'], baseURL: BASE_URL },
+    },
     {
       name: 'client-chromium',
-      testMatch: /client\.spec\.ts/,
+      testMatch: /(client|auth)\.spec\.ts/,
       use: { ...devices['Pixel 7'], baseURL: CLIENT_URL },
     },
     {
       name: 'client-webkit',
-      testMatch: /client\.spec\.ts/,
+      testMatch: /(client|auth)\.spec\.ts/,
       use: { ...devices['iPhone 14'], baseURL: CLIENT_URL },
     },
   ],

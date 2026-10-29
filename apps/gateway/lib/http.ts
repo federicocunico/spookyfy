@@ -101,9 +101,16 @@ export function clientIp(req: Request): string {
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** Protezione CSRF: le richieste che modificano dati devono venire dall'origine dell'app. */
+/**
+ * Protezione CSRF: le richieste che modificano dati devono venire dall'origine dell'app,
+ * cioè quella pubblica configurata o quella da cui è servita la richiesta stessa (gli
+ * altri domini dello stesso deploy Vercel, es. `<progetto>-<team>.vercel.app`). Un sito
+ * terzo non può falsificare `Origin`, quindi resta escluso in entrambi i casi.
+ */
 export function assertOrigin(req: Request, publicOrigin: string): void {
-  if (UNSAFE.has(req.method) && req.headers.get('origin') !== publicOrigin) {
+  if (!UNSAFE.has(req.method)) return;
+  const origin = req.headers.get('origin');
+  if (origin !== publicOrigin && origin !== new URL(req.url).origin) {
     throw new HttpError(403, ErrorCode.ForbiddenOrigin, 'Origine della richiesta non consentita');
   }
 }

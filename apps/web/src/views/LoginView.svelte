@@ -62,6 +62,9 @@ async function submit(e: SubmitEvent) {
       />
     </div>
     {#if error}<p class="field-error" role="alert">{error}</p>{/if}
+    {#if connection.offline}
+      <p class="field-error" role="alert">Server non raggiungibile: l'accesso richiede la connessione.</p>
+    {/if}
     <button class="btn btn-primary submit" type="submit" disabled={busy || connection.offline}>Accedi</button>
   </form>
   <p class="alt">

@@ -14,11 +14,24 @@ let errors = $state<Record<string, string>>({});
 let general = $state<string | null>(null);
 let busy = $state(false);
 
-const usernameValid = $derived(usernameSchema.safeParse(username).success);
+// Spazi ai bordi ignorati: la tastiera del telefono li aggiunge dopo un suggerimento.
+const usernameCheck = $derived(usernameSchema.safeParse(username.trim()));
+const usernameValid = $derived(usernameCheck.success);
+/** Errore di formato mostrato mentre si scrive, così il pulsante disabilitato ha un perché. */
+const usernameHint = $derived(
+  username.trim().length > 0 && !usernameCheck.success
+    ? (usernameCheck.error.issues[0]?.message ?? null)
+    : null,
+);
 const passwordValid = $derived(passwordSchema.safeParse(password).success);
 const mismatch = $derived(confirm.length > 0 && confirm !== password);
 const canSubmit = $derived(
-  usernameValid && passwordValid && confirm === password && token.length > 0 && !busy && !connection.offline,
+  usernameValid &&
+    passwordValid &&
+    confirm === password &&
+    token.trim().length > 0 &&
+    !busy &&
+    !connection.offline,
 );
 
 /** Gli errori del server spariscono quando l'utente modifica il campo. */
@@ -33,7 +46,7 @@ async function submit(e: SubmitEvent) {
   errors = {};
   general = null;
   try {
-    await session.register({ username, password, token });
+    await session.register({ username: username.trim(), password, token: token.trim() });
     router.navigate(safeNext(router.route.search), { replace: true });
   } catch (err) {
     if (err instanceof ApiError) {
@@ -63,11 +76,11 @@ async function submit(e: SubmitEvent) {
         maxlength="32"
         bind:value={username}
         oninput={() => clearError('username')}
-        aria-invalid={errors.username ? 'true' : undefined}
+        aria-invalid={errors.username || usernameHint ? 'true' : undefined}
         aria-describedby="reg-username-help"
       />
-      {#if errors.username}
-        <span id="reg-username-help" class="field-error" role="alert">{errors.username}</span>
+      {#if errors.username || usernameHint}
+        <span id="reg-username-help" class="field-error" role="alert">{errors.username || usernameHint}</span>
       {:else}
         <span id="reg-username-help" class="muted hint">3–32 caratteri: lettere, cifre, punto, trattino, underscore</span>
       {/if}
@@ -114,6 +127,9 @@ async function submit(e: SubmitEvent) {
       {#if errors.token}<span class="field-error" role="alert">{errors.token}</span>{/if}
     </div>
     {#if general}<p class="field-error" role="alert">{general}</p>{/if}
+    {#if connection.offline}
+      <p class="field-error" role="alert">Server non raggiungibile: la registrazione richiede la connessione.</p>
+    {/if}
     <button class="btn btn-primary submit" type="submit" disabled={!canSubmit}>Crea account</button>
   </form>
   <p class="alt">

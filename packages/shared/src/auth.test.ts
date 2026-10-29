@@ -73,3 +73,15 @@ test('il corpo della registrazione richiede il token', () => {
     true,
   );
 });
+
+test('username e token senza spazi ai bordi (tastiere dei telefoni)', () => {
+  const r = registerBodySchema.safeParse({ username: ' Fede ', password: 'Notte#2026', token: 'tok \n' });
+  expect(r.success && r.data).toMatchObject({ username: 'Fede', token: 'tok' });
+  // Gli spazi interni restano un errore.
+  expect(
+    registerBodySchema.safeParse({ username: 'fe de', password: 'Notte#2026', token: 'x' }).success,
+  ).toBe(false);
+  // La password resta com'è: gli spazi possono farne parte.
+  const p = registerBodySchema.safeParse({ username: 'fede', password: ' Notte#2026 ', token: 'x' });
+  expect(p.success && p.data.password).toBe(' Notte#2026 ');
+});

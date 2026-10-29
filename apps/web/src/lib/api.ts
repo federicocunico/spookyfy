@@ -76,7 +76,8 @@ export async function request<T>(
     const e = new ApiError(
       res.status,
       err?.code ?? `HTTP_${res.status}`,
-      err?.message ?? 'Errore del server',
+      // Risposta non JSON (es. pagina di errore della piattaforma): il codice HTTP aiuta a capire.
+      err?.message ?? `Errore del server (HTTP ${res.status})`,
       err?.fields,
     );
     if (res.status === 401 && e.code === 'UNAUTHENTICATED') hooks.onUnauthenticated();

@@ -6,7 +6,8 @@
   "scripts": {
     "test": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "screenshots": "playwright test -c screenshots.config.ts"
+    "screenshots": "playwright test -c screenshots.config.ts",
+    "verify:prod": "playwright test -c remote.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

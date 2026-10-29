@@ -86,15 +86,20 @@ export function normalizeUsername(username: string): string {
   return username.toLowerCase();
 }
 
+// Username e token senza spazi ai bordi: le tastiere dei telefoni li aggiungono dopo un
+// suggerimento o un incolla, e un token giusto con uno spazio in coda verrebbe rifiutato.
 export const registerBodySchema = z.object({
-  username: usernameSchema,
+  username: z.string({ required_error: 'Lo username è obbligatorio' }).trim().pipe(usernameSchema),
   password: passwordSchema,
-  token: z.string({ required_error: 'Il token di invito è obbligatorio' }).max(256, 'Token troppo lungo'),
+  token: z
+    .string({ required_error: 'Il token di invito è obbligatorio' })
+    .trim()
+    .max(256, 'Token troppo lungo'),
 });
 export type RegisterBody = z.infer<typeof registerBodySchema>;
 
 export const loginBodySchema = z.object({
-  username: z.string().min(1, 'Inserisci lo username').max(64),
+  username: z.string().trim().min(1, 'Inserisci lo username').max(64),
   password: z
     .string()
     .min(1, 'Inserisci la password')

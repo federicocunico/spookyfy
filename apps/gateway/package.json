@@ -12,6 +12,7 @@
     "vercel-build": "pnpm --dir ../.. build:shared && pnpm --dir ../.. --filter @spookyfy/web build && node scripts/copy-web.mjs && node scripts/count-functions.mjs",
     "count-functions": "node scripts/count-functions.mjs",
     "cli": "tsx --env-file-if-exists=.env lib/cli-main.ts",
+    "verify": "tsx --env-file-if-exists=.env scripts/verify-deploy.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

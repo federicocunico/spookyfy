@@ -112,11 +112,12 @@ corepack enable && pnpm install
 pnpm dev                               # on-premise: server :8787 + Vite :5173
 pnpm --filter @spookyfy/gateway dev    # modalità client: :4174 (KV in memoria, YouTube finto)
 pnpm test && pnpm test:e2e             # unit/integrazione e Playwright
+pnpm verify:prod && pnpm verify:prod:ui   # verifica del deploy pubblicato (API e browser)
 pnpm lint && pnpm typecheck
 ```
 
 ## Documentazione
 
-[Guida completa](docs/guida.md) (variabili, dimensionamento, backup, limiti di Vercel) · [Account](docs/auth.md) · [Ponte on-premise](docs/bridge.md) · Verifiche su [iPhone](docs/verification-ios.md) e [Android](docs/verification-android.md)
+[Guida completa](docs/guida.md) (variabili, dimensionamento, backup, limiti di Vercel) · [Account](docs/auth.md) · [Ponte on-premise](docs/bridge.md) · [Test e verifica del deploy](docs/verifica-deploy.md) · Verifiche su [iPhone](docs/verification-ios.md) e [Android](docs/verification-android.md)
 
 > `yt-dlp` e il gateway sono pensati per uso personale: il rispetto dei termini delle piattaforme è responsabilità di chi installa Spookyfy.

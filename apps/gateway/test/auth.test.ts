@@ -79,6 +79,43 @@ describe('registrazione', () => {
     );
     expect(res.status).toBe(403);
     expect((await res.json()).error.code).toBe('FORBIDDEN_ORIGIN');
+    // Senza Origin (client non browser) la richiesta è rifiutata comunque.
+    const none = await call(
+      d,
+      'register',
+      req('POST', '/api/auth/register', {
+        body: { username: 'fede', password: PASSWORD, token: TOKEN },
+        origin: null,
+      }),
+    );
+    expect(none.status).toBe(403);
+  });
+
+  test('altro dominio dello stesso deploy (es. <progetto>-<team>.vercel.app) accettato', async () => {
+    const d = makeDeps();
+    const alias = 'https://spookyfy-team.vercel.app';
+    const body = JSON.stringify({ username: 'fede', password: PASSWORD, token: TOKEN });
+    const post = (origin: string) =>
+      call(
+        d,
+        'register',
+        new Request(`${alias}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': '203.0.113.9' },
+          body,
+        }),
+      );
+    // Origine diversa sia dall'alias sia da quella pubblica: rifiutata.
+    expect((await post('https://evil.example')).status).toBe(403);
+    expect((await post(alias)).status).toBe(201);
+  });
+
+  test('token e username con spazi ai bordi (incolla dal telefono) accettati', async () => {
+    const d = makeDeps();
+    const res = await register(d, { username: ' Fede ', token: ` ${TOKEN}\n` });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ username: 'Fede' });
+    expect((await login(d, 'fede ')).status).toBe(200);
   });
 });
 

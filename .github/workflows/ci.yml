@@ -82,3 +82,9 @@ jobs:
       - run: curl --fail --silent --show-error "$PRODUCTION_URL/api/health" | grep '"mode":"client"'
         env:
           PRODUCTION_URL: ${{ vars.VERCEL_PRODUCTION_URL }}
+
+  # Registrazione, sessione e ricerca sul deploy appena pubblicato (API e browser).
+  verify-production:
+    needs: deploy-vercel
+    uses: ./.github/workflows/verify-production.yml
+    secrets: inherit

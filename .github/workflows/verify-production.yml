@@ -1,0 +1,49 @@
+name: Verifica produzione
+
+# Controlla il deploy pubblicato su Vercel: API (scripts/verify-deploy.ts) e browser
+# (e2e/remote, come iPhone e Android). Gira dopo ogni deploy della CI e a mano da
+# Actions → "Verifica produzione" → Run workflow. Vedi docs/verifica-deploy.md.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: URL da verificare (vuoto = variabile VERCEL_PRODUCTION_URL)
+        required: false
+  workflow_call:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SPOOKYFY_URL: ${{ inputs.url || vars.VERCEL_PRODUCTION_URL }}
+      VERIFY_REGISTRATION_TOKEN: ${{ secrets.VERIFY_REGISTRATION_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:shared
+      # REDIS_URL serve solo per eliminare gli account di prova alla fine.
+      - name: Database di produzione per la pulizia
+        run: |
+          npm install --global vercel@50.32.3
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          url=$(grep '^REDIS_URL=' .vercel/.env.production.local | cut -d= -f2- | tr -d '"')
+          if [ -z "$url" ]; then echo '::warning::REDIS_URL non disponibile: gli account di prova restano'; exit 0; fi
+          echo "::add-mask::$url"
+          echo "REDIS_URL=$url" >> "$GITHUB_ENV"
+      - name: API
+        run: pnpm verify:prod "$SPOOKYFY_URL"
+      - run: pnpm --filter @spookyfy/e2e exec playwright install --with-deps chromium webkit
+      - name: Browser (iPhone e Android)
+        run: pnpm verify:prod:ui
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: verifica-produzione
+          path: e2e/playwright-report

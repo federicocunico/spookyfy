@@ -51,7 +51,10 @@ Verifica:
 
 ```bash
 curl https://<progetto>.vercel.app/api/health    # {"status":"ok","mode":"client",...}
+VERIFY_REGISTRATION_TOKEN='il-tuo-token-di-invito' pnpm verify:prod https://<progetto>.vercel.app
 ```
+
+Verifica completa (API e browser) e cosa fare se la registrazione non va: [verifica-deploy.md](verifica-deploy.md).
 
 ## 5. Deploy automatico dalla CI di GitHub
 
@@ -65,7 +68,10 @@ Il job `deploy-vercel` di `.github/workflows/ci.yml` pubblica in produzione a og
    gh secret set VERCEL_ORG_ID --body "$(node -p "require('./.vercel/project.json').orgId")"
    gh secret set VERCEL_PROJECT_ID --body "$(node -p "require('./.vercel/project.json').projectId")"
    gh variable set VERCEL_PRODUCTION_URL --body https://<progetto>.vercel.app
+   gh secret set VERIFY_REGISTRATION_TOKEN                            # token di invito, per la verifica dopo il deploy
    ```
+
+Dopo il deploy, il job `verify-production` registra un account di prova sulla produzione (API e browser) e poi lo elimina: vedi [verifica-deploy.md](verifica-deploy.md).
 
 Il progetto non è collegato a Git su Vercel, quindi non ci sono deploy doppi: pubblica solo la CI.
 
