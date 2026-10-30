@@ -12,7 +12,9 @@ Per Development Mode il proprietario dell'app developer deve mantenere Premium e
 
 Il wrapper multiservizio e le funzioni ibride incontrano limiti della [Developer Policy § III](https://developer.spotify.com/policy). Prima di abilitare l'integrazione reale serve risolvere e documentare quel vincolo rispetto all'uso effettivo dell'app. Il flag di configurazione non concede un'autorizzazione da Spotify. Non assumere che un account Premium o il funzionamento tecnico del SDK risolvano questo punto.
 
-**Stato del vincolo:** irrisolto; nessuna autorizzazione Spotify dichiarata o acquisita da questa implementazione. Le verifiche automatiche usano dati sintetici.
+**Decisione del proprietario, 30 ottobre 2026:** dopo la segnalazione dei vincoli, il proprietario ritiene che non si applichino al proprio utilizzo e ha richiesto esplicitamente di procedere con l'attivazione e le prove personali. Su questa indicazione sono abilitati il modulo reale e la riproduzione ibrida nell'installazione Vercel. La decisione dell'operatore non costituisce un'autorizzazione rilasciata da Spotify né una verifica legale indipendente; il punto 9.1 resta aperto per tale verifica. Le verifiche automatiche svolte finora usano dati sintetici.
+
+La configurazione di produzione usa la callback `https://spookyfy-music.vercel.app/api/spotify/callback`, Client ID backend e una chiave di cifratura dedicata conservata come variabile sensibile su Vercel. Il provider sintetico resta disattivato. Registrazione della callback e allowlist nella dashboard devono ancora essere confermate dal proprietario; OAuth, streaming e prove sui dispositivi reali non sono ancora attestati.
 
 ## Configurazione facoltativa
 
@@ -136,4 +138,4 @@ Durante le verifiche sono comparsi un timeout isolato nel parser MP3 e un downlo
 
 Preview e rollback sono stati verificati **localmente** sui build di produzione e sugli handler del gateway, senza credenziali Spotify: il client rimane compatibile con IndexedDB v4 e la parte locale funziona con Spotify disattivato. Questi esiti descrivono la verifica precedente alla pubblicazione; il risultato del deploy remoto è attestato separatamente dal workflow CI GitHub.
 
-L'attivazione personale è ancora da eseguire: risoluzione del vincolo piattaforma, app dashboard e allowlist, redirect/chiavi dell'ambiente scelto, OAuth del proprietario e prove reali desktop/mobile. Non occorre condividere password, refresh token o chiavi nel messaggio di chat.
+L'attivazione personale è in corso su richiesta esplicita del proprietario: la configurazione del gateway Vercel è predisposta. Restano da confermare callback e allowlist nella dashboard e da eseguire OAuth del proprietario e prove reali desktop/mobile. L'eventuale ambiente on-premise richiede una propria callback e chiavi dedicate. La verifica indipendente del vincolo di piattaforma resta non attestata. Non occorre condividere password, refresh token o chiavi nel messaggio di chat.
