@@ -1,8 +1,7 @@
-import fs from 'node:fs/promises';
 import type Database from 'better-sqlite3';
 import type { FastifyBaseLogger } from 'fastify';
-import NodeID3 from 'node-id3';
 import { absMediaPath } from './paths.js';
+import { updateTagsAtomically } from './tags.js';
 
 /**
  * Riscrive in background album, artista dell'album, numero di traccia e generi nei tag
@@ -69,18 +68,13 @@ export class TagWriter {
     if (!t) return;
     const file = absMediaPath(this.mediaDir, t.audio_path);
     const inAlbum = t.album_id !== null;
-    const result = await NodeID3.Promise.update(
-      {
-        album: t.album ?? '',
-        performerInfo: inAlbum ? (t.album_artist ?? '') : '',
-        trackNumber: inAlbum ? `${t.track_no}/${t.track_total}` : '',
-        genre: t.genres ?? '',
-      },
-      file,
-    );
-    if (result !== true && result !== undefined) throw result;
+    const size = await updateTagsAtomically(file, {
+      album: t.album ?? '',
+      performerInfo: inAlbum ? (t.album_artist ?? '') : '',
+      trackNumber: inAlbum ? `${t.track_no}/${t.track_total}` : '',
+      genre: t.genres ?? '',
+    });
     // La riscrittura cambia la dimensione del file: il client la usa per verificare i download.
-    const { size } = await fs.stat(file);
     this.sqlite.prepare('UPDATE tracks SET size_bytes = ? WHERE id = ?').run(size, trackId);
   }
 }

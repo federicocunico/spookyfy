@@ -112,6 +112,8 @@ describe('importazione', () => {
     const job = await ingest('abcdefghijk');
     expect(job.status).toBe('queued');
     await ctx.app.ingest.idle();
+    // Album assignment queues a separate tag update; compare its final file and DB snapshot.
+    await ctx.app.catalog.tagWriter.idle();
 
     const done = (await api.get('/api/jobs')).json().items.find((j: JobDto) => j.id === job.id);
     expect(done).toMatchObject({ status: 'completed', progress: 1, error: null });

@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import NodeID3 from 'node-id3';
 
 export interface TrackTags {
@@ -6,6 +9,40 @@ export interface TrackTags {
   album?: string | null;
   /** Copertina JPEG da incorporare (frame APIC "Front cover"). */
   cover?: Buffer;
+}
+
+const updates = new Map<string, Promise<number>>();
+
+/** Replaces tags without exposing a truncated or partially written published file. */
+export function updateTagsAtomically(file: string, tags: NodeID3.Tags): Promise<number> {
+  const key = path.resolve(file);
+  const previous = updates.get(key) ?? Promise.resolve(0);
+  const current = previous
+    .catch(() => 0)
+    .then(async () => {
+      const stat = await fs.stat(key);
+      const original = await fs.readFile(key);
+      const updated = NodeID3.update(tags, original);
+      if (!Buffer.isBuffer(updated)) throw new Error('Aggiornamento ID3 non riuscito');
+
+      const temp = path.join(path.dirname(key), `.${path.basename(key)}.${randomUUID()}.tmp`);
+      try {
+        await fs.writeFile(temp, updated, { flag: 'wx', mode: stat.mode & 0o777 });
+        await fs.chmod(temp, stat.mode & 0o777).catch(() => {});
+        await fs.rename(temp, key);
+        return updated.length;
+      } catch (err) {
+        await fs.rm(temp, { force: true }).catch(() => {});
+        throw err;
+      }
+    });
+  updates.set(key, current);
+  void current
+    .finally(() => {
+      if (updates.get(key) === current) updates.delete(key);
+    })
+    .catch(() => {});
+  return current;
 }
 
 function toId3(tags: TrackTags): NodeID3.Tags {
@@ -21,7 +58,7 @@ function toId3(tags: TrackTags): NodeID3.Tags {
   return out;
 }
 
-/** Scrive da zero i tag ID3 del file (sostituisce quelli esistenti). */
+/** Scrive i tag dei file di lavoro dell'importazione; per file pubblicati usare l'update atomico. */
 export async function writeTags(file: string, tags: TrackTags): Promise<void> {
   await NodeID3.Promise.write(toId3(tags), file);
 }
@@ -35,7 +72,7 @@ export async function updateTextTags(
   if (tags.title !== undefined) patch.title = tags.title;
   if (tags.artist !== undefined) patch.artist = tags.artist;
   if (tags.album !== undefined) patch.album = tags.album ?? '';
-  await NodeID3.Promise.update(patch, file);
+  await updateTagsAtomically(file, patch);
 }
 
 export async function readTags(file: string): Promise<NodeID3.Tags> {
