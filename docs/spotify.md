@@ -14,7 +14,7 @@ Il wrapper multiservizio e le funzioni ibride incontrano limiti della [Developer
 
 **Decisione del proprietario, 30 ottobre 2026:** dopo la segnalazione dei vincoli, il proprietario ritiene che non si applichino al proprio utilizzo e ha richiesto esplicitamente di procedere con l'attivazione e le prove personali. Su questa indicazione sono abilitati il modulo reale e la riproduzione ibrida nell'installazione Vercel. La decisione dell'operatore non costituisce un'autorizzazione rilasciata da Spotify né una verifica legale indipendente; il punto 9.1 resta aperto per tale verifica. Le verifiche automatiche svolte finora usano dati sintetici.
 
-La configurazione di produzione usa la callback `https://spookyfy-music.vercel.app/api/spotify/callback`, Client ID backend e una chiave di cifratura dedicata conservata come variabile sensibile su Vercel. Il provider sintetico resta disattivato. Registrazione della callback e allowlist nella dashboard devono ancora essere confermate dal proprietario; OAuth, streaming e prove sui dispositivi reali non sono ancora attestati.
+La configurazione di produzione usa la callback `https://spookyfy-music.vercel.app/api/spotify/callback`, Client ID backend e una chiave di cifratura dedicata conservata come variabile sensibile su Vercel. Il provider sintetico resta disattivato. Il proprietario ha confermato il primo collegamento OAuth riuscito il 30 ottobre 2026; rinnovo, unlink, streaming e prove sui dispositivi reali non sono ancora attestati.
 
 ## Configurazione facoltativa
 
@@ -45,6 +45,8 @@ Per mostrare le playlist native modificabili, il backend può confrontare tempor
 
 I permessi crescono solo su richiesta della funzione: consultazione, modifica libreria, modifica playlist e streaming sono capacità distinte. Una nuova autorizzazione rifiutata non deve cancellare quella precedente.
 
+Il [tutorial ufficiale del Web Playback SDK](https://developer.spotify.com/documentation/web-playback-sdk/howtos/web-app-player) richiede anche `user-read-email`, oltre a `streaming` e `user-read-private`. Questo scope si richiede soltanto scegliendo **Autorizza riproduzione Spotify**, insieme ai permessi di controllo del player. Il primo collegamento per leggere la libreria non lo richiede; l'email non viene salvata né usata come identità. I collegamenti con autorizzazioni di riproduzione parziali devono completare questo consenso. Le impostazioni mostrano l'apertura del consenso, gli eventuali errori e la conferma dei permessi già concessi. Dopo il consenso occorre attivare il player browser o scegliere un dispositivo per avviare l'ascolto.
+
 Access e refresh token persistenti sono cifrati sul backend. Il player riceve soltanto un access token temporaneo in memoria, con risposta non memorizzabile in cache. I token non devono apparire nei log, nel backup portabile, negli URL di ritorno alle impostazioni, in IndexedDB o localStorage.
 
 I [refresh token](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens) hanno una durata documentata di sei mesi, che non viene estesa dai rinnovi dell'access token. Scadenza o revoca richiedono una nuova autorizzazione Spotify; il login Spookyfy resta indipendente.
@@ -54,7 +56,7 @@ I [refresh token](https://developer.spotify.com/documentation/web-api/tutorials/
 ## Librerie e playlist
 
 - La libreria locale e la ricerca YouTube mantengono il loro percorso precedente.
-- La sezione Spotify consulta brani, album, artisti e playlist autorizzati; i risultati riportano provenienza e link Spotify.
+- La sezione Spotify consulta brani, album, artisti e playlist autorizzati; i risultati usano card coerenti con la Home, con badge e icona Spotify in alto a destra e link alla sorgente.
 - I preferiti locali e i salvataggi Spotify sono operazioni separate ed esplicite.
 - Le playlist native Spotify si modificano soltanto con scope e permessi sufficienti. Creare una playlist senza scelta pubblica esplicita la rende privata.
 - L'API nativa di rimozione opera per URI: il comando dell'app indica esplicitamente che rimuove tutte le occorrenze del brano scelto e richiede conferma. Le raccolte Spookyfy permettono invece di rimuovere una singola occorrenza. [Remove playlist items](https://developer.spotify.com/documentation/web-api/reference/remove-items-playlist).
@@ -75,7 +77,7 @@ Superficie applicativa chiusa sotto `/api/spotify/*`, autenticata tramite sessio
 | `saved` | `PUT/DELETE /me/library` | `user-library-modify` per brani/album |
 | `playlist` | `POST /me/playlists`, modifica dettagli playlist | `playlist-modify-private/public` |
 | `playlist-items` | `/playlists/{id}/items` | Permessi di lettura/scrittura appropriati |
-| `devices`, `playback` | `/me/player/*` e SDK ufficiale | `streaming`, `user-read-playback-state`, `user-modify-playback-state` |
+| `devices`, `playback` | `/me/player/*` e SDK ufficiale | `streaming`, `user-read-private`, `user-read-email`, `user-read-playback-state`, `user-modify-playback-state` |
 
 Riferimenti verificati per il contratto 2026:
 
@@ -132,10 +134,12 @@ La revisione ha corretto permessi/contenuti delle playlist native, conservazione
 
 Gli scenari browser usano backend sintetico e protocollo SDK simulato, senza account o credenziali Spotify personali. Comprendono modifiche native con duplicati, raccolte ibride, offline, backup su database nuovo, unlink, errori del provider e disattivazione dei flag. I test di autenticazione client sono stati ripetuti su entrambi i browser dopo la correzione della cancellazione account.
 
+Il follow-up del 30 ottobre su consensi di riproduzione e card Spotify ha superato lint, typecheck, build, 697 test automatici (Spotify 52 e web 313) e tutti i 16 E2E Spotify sui due backend e su Chromium/WebKit. La verifica visiva usa screenshot degli ambienti sintetici; non attesta lo streaming con l'account personale.
+
 Le due esclusioni unit/integration richiedono Redis esterno e YouTube reale. Le tre esclusioni browser sono i controlli Chromium di installabilità/CLS su WebKit e l'auto-trim client con codec non disponibile su WebKit. EVAL Redis/Upstash è verificato con adapter simulati; questo risultato non equivale a una prova su un servizio Redis/Upstash remoto.
 
 Durante le verifiche sono comparsi un timeout isolato nel parser MP3 e un download locale rallentato; entrambi sono passati nelle successive esecuzioni isolate e complete, senza aumentare i timeout dei test.
 
 Preview e rollback sono stati verificati **localmente** sui build di produzione e sugli handler del gateway, senza credenziali Spotify: il client rimane compatibile con IndexedDB v4 e la parte locale funziona con Spotify disattivato. Questi esiti descrivono la verifica precedente alla pubblicazione; il risultato del deploy remoto è attestato separatamente dal workflow CI GitHub.
 
-L'attivazione personale è in corso su richiesta esplicita del proprietario: la configurazione del gateway Vercel è predisposta. Restano da confermare callback e allowlist nella dashboard e da eseguire OAuth del proprietario e prove reali desktop/mobile. L'eventuale ambiente on-premise richiede una propria callback e chiavi dedicate. La verifica indipendente del vincolo di piattaforma resta non attestata. Non occorre condividere password, refresh token o chiavi nel messaggio di chat.
+L'attivazione personale è in corso su richiesta esplicita del proprietario: la configurazione del gateway Vercel è predisposta e il primo OAuth è stato confermato dal proprietario. Restano le prove di rinnovo/unlink, i consensi aggiuntivi, la riproduzione e le verifiche reali desktop/mobile. L'eventuale ambiente on-premise richiede una propria callback e chiavi dedicate. La verifica indipendente del vincolo di piattaforma resta non attestata. Non occorre condividere password, refresh token o chiavi nel messaggio di chat.

@@ -19,6 +19,10 @@ async function authorize(page: Page, label: string) {
   await page.goto('/settings');
   await page.getByRole('button', { name: label, exact: true }).click();
   await expect(page).toHaveURL(/\/settings\?spotify=linked/);
+  if (label === 'Autorizza riproduzione Spotify') {
+    await expect(page.getByText('Riproduzione Spotify autorizzata.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0);
+  }
 }
 
 async function searchSpotify(page: Page) {
@@ -69,7 +73,7 @@ async function installSdk(page: Page) {
 test('Spotify: linking dopo registrazione, ricerca, playlist native e scollegamento', async ({
   page,
   browserName,
-}) => {
+}, testInfo) => {
   const anonymous = await page.request.get('/api/spotify/status');
   expect(anonymous.status()).toBe(401);
   await connect(page, browserName);
@@ -77,6 +81,9 @@ test('Spotify: linking dopo registrazione, ricerca, playlist native e scollegame
   await page.goto('/spotify');
   await page.getByRole('button', { name: 'Carica libreria Spotify', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Demo playlist', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Contenuto da Spotify').first()).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({ path: testInfo.outputPath('spotify-library.png'), fullPage: true });
   await page.getByText('Crea playlist Spotify', { exact: true }).click();
   const name = `Prova ${browserName}`;
   await page.getByRole('textbox', { name: 'Nome nuova playlist Spotify' }).fill(name);

@@ -1,10 +1,26 @@
 <script lang="ts">
+import type { SpotifyLinkBody } from '@spookyfy/shared';
 import { services } from '../lib/services.svelte';
 import { spotifyErrorMessage } from '../lib/spotify/transport';
 const { spotify, session, router } = services();
 let busy = $state(false);
 let error = $state('');
 let consent = $state(false);
+let authorizing = $state(false);
+const hasScopes = (...scopes: string[]) =>
+  spotify.status?.linkState === 'linked' && scopes.every((scope) => spotify.status?.scopes.includes(scope));
+const libraryAuthorized = $derived(
+  hasScopes('user-library-read', 'playlist-read-private', 'playlist-read-collaborative'),
+);
+const playbackAuthorized = $derived(
+  hasScopes(
+    'user-read-private',
+    'user-read-email',
+    'streaming',
+    'user-read-playback-state',
+    'user-modify-playback-state',
+  ),
+);
 async function run(action: () => Promise<void>) {
   busy = true;
   error = '';
@@ -15,6 +31,11 @@ async function run(action: () => Promise<void>) {
   } finally {
     busy = false;
   }
+}
+async function authorize(capability: SpotifyLinkBody['capability']) {
+  authorizing = true;
+  await run(() => spotify.link(capability));
+  authorizing = false;
 }
 const outcome = new URLSearchParams(window.location.search).get('spotify');
 </script>
@@ -39,15 +60,34 @@ const outcome = new URLSearchParams(window.location.search).get('spotify');
       <button class="btn btn-secondary" onclick={() => router.navigate('/spotify')}>Apri libreria Spotify</button>
       <button class="btn btn-secondary" disabled={busy} onclick={() => run(() => spotify.unlink())}>Scollega Spotify</button>
     {/if}
-    <label><input type="checkbox" bind:checked={consent} /> Consento di collegare Spotify e leggere la libreria richiesta. Le modifiche e la riproduzione richiedono autorizzazioni separate.</label>
-    <button class="btn btn-secondary" disabled={busy || !consent || session.status !== 'authenticated' || session.offlineMode} onclick={() => run(() => spotify.link('library'))}>{spotify.status.linkState === 'unlinked' ? 'Collega Spotify' : 'Autorizza lettura libreria'}</button>
+    {#if libraryAuthorized}
+      <p class="authorized">Lettura libreria Spotify autorizzata.</p>
+    {:else}
+      <label><input type="checkbox" bind:checked={consent} /> Consento di collegare Spotify e leggere la libreria richiesta. Le modifiche e la riproduzione richiedono autorizzazioni separate.</label>
+      <button class="btn btn-secondary" disabled={busy || !consent || session.status !== 'authenticated' || session.offlineMode} onclick={() => authorize('library')}>{spotify.status.linkState === 'unlinked' ? 'Collega Spotify' : 'Autorizza lettura libreria'}</button>
+    {/if}
     {#if spotify.status.linkState === 'linked'}
-      <button class="btn btn-secondary" disabled={busy} onclick={() => run(() => spotify.link('library-write'))}>Autorizza salvataggi Spotify</button>
-      <button class="btn btn-secondary" disabled={busy} onclick={() => run(() => spotify.link('playlist-write'))}>Autorizza modifiche playlist Spotify</button>
-      <button class="btn btn-secondary" disabled={busy} onclick={() => run(() => spotify.link('playback'))}>Autorizza riproduzione Spotify</button>
+      {#if hasScopes('user-library-modify')}
+        <p class="authorized">Salvataggi Spotify autorizzati.</p>
+      {:else}
+        <button class="btn btn-secondary" disabled={busy || session.offlineMode} onclick={() => authorize('library-write')}>Autorizza salvataggi Spotify</button>
+      {/if}
+      {#if hasScopes('playlist-modify-private', 'playlist-modify-public')}
+        <p class="authorized">Modifiche playlist Spotify autorizzate.</p>
+      {:else}
+        <button class="btn btn-secondary" disabled={busy || session.offlineMode} onclick={() => authorize('playlist-write')}>Autorizza modifiche playlist Spotify</button>
+      {/if}
+      {#if playbackAuthorized}
+        <p class="authorized" role="status">Riproduzione Spotify autorizzata.</p>
+        <p>Apri la libreria Spotify e attiva il player browser oppure scegli un dispositivo per ascoltare.</p>
+      {:else}
+        <button class="btn btn-secondary" disabled={busy || session.offlineMode} onclick={() => authorize('playback')}>Autorizza riproduzione Spotify</button>
+        <p class="small muted">Per il player ufficiale Spotify richiede anche il permesso di leggere l’indirizzo email.</p>
+      {/if}
     {/if}
     {#if spotify.status.reason}<p role="status">{spotify.status.message ?? spotifyErrorMessage(spotify.status.reason)}</p>{/if}
   {/if}
+  {#if authorizing}<p role="status">Apertura di Spotify per autorizzare la funzione…</p>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
 </section>
-<style>.spotify { display:grid; gap:1rem; padding:1rem; margin-top:1.5rem; border-radius:1rem; background:var(--surface-1); } label { display:flex; gap:.75rem; align-items:start; }</style>
+<style>.spotify { display:grid; gap:1rem; padding:1rem; margin-top:1.5rem; border-radius:1rem; background:var(--surface-1); } label { display:flex; gap:.75rem; align-items:start; } .authorized { color:var(--text); font-weight:600; }</style>

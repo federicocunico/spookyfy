@@ -251,18 +251,18 @@ async function copyPlaylist() {
 </script>
 
 <section aria-label={search ? 'Ricerca Spotify' : 'Libreria Spotify'} class="spotify-browser">
-  <h2>Spotify</h2>
+  <h2 class="section-title">{search ? 'Spotify' : libraryType === 'playlists' ? 'Le tue playlist' : libraryType === 'tracks' ? 'I tuoi brani salvati' : 'I tuoi album salvati'}</h2>
   {#if !spotify.status?.capabilities.canBrowse}
     <p>Collega Spotify e autorizza la lettura dalle <a href="/settings">impostazioni</a>.</p>
   {:else}
     {#if search}
       <form onsubmit={(event) => { event.preventDefault(); void load(); }} role="search" aria-label="Cerca su Spotify">
         <input class="input" type="search" aria-label="Ricerca Spotify" maxlength="200" bind:value={query} />
-        <select aria-label="Tipo risultato Spotify" bind:value={kind}><option value="track">Brani</option><option value="album">Album</option><option value="artist">Artisti</option><option value="playlist">Playlist</option></select>
+        <select class="input" aria-label="Tipo risultato Spotify" bind:value={kind}><option value="track">Brani</option><option value="album">Album</option><option value="artist">Artisti</option><option value="playlist">Playlist</option></select>
         <button class="btn btn-secondary" disabled={loading || !query.trim()}>Cerca su Spotify</button>
       </form>
     {:else}
-      <select aria-label="Raccolta Spotify" bind:value={libraryType}><option value="playlists">Playlist</option><option value="tracks">Brani salvati</option><option value="albums">Album salvati</option></select>
+      <select class="input" aria-label="Raccolta Spotify" bind:value={libraryType}><option value="playlists">Playlist</option><option value="tracks">Brani salvati</option><option value="albums">Album salvati</option></select>
       <button class="btn btn-secondary" onclick={() => load()} disabled={loading}>Carica libreria Spotify</button>
       <details><summary>Crea playlist Spotify</summary>
         <input class="input" aria-label="Nome nuova playlist Spotify" bind:value={name} maxlength="100" />
@@ -320,13 +320,46 @@ async function copyPlaylist() {
       <ul>{#each detailItems as item (item.uri)}<li><button onclick={() => open(item)}>{item.name}</button> <a href={item.externalUrl} target="_blank" rel="noopener noreferrer">Spotify</a>{#if item.kind === 'track'}<button disabled={!item.available || !spotify.status.capabilities.canStream} onclick={() => play(item)}>Riproduci {item.name} su Spotify</button>{/if}</li>{/each}</ul>
       {#if detailNext !== null}<button class="btn btn-secondary" disabled={loading} onclick={() => open(detail!.entity, true)}>Altri elementi Spotify</button>{/if}
     {:else}
-      <ul>{#each items as item (item.uri)}<li>
-        {#if item.imageUrl}<a href={item.externalUrl} target="_blank" rel="noopener noreferrer"><img src={item.imageUrl} alt={`Copertina di ${item.name} su Spotify`} width="64" height="64" loading="lazy" /></a>{/if}
-        <button onclick={() => open(item)}>{item.name} {item.artists.join(', ')}</button>
-        <a href={item.externalUrl} target="_blank" rel="noopener noreferrer">Apri su Spotify</a>
-      </li>{/each}</ul>
+      <ul class="entity-grid" aria-label="Risultati Spotify">
+        {#each items as item (item.uri)}
+          <li class="entity-card">
+            <div class="artwork">
+              {#if item.imageUrl}<a class="artwork-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer"><img src={item.imageUrl} alt={`Copertina di ${item.name} su Spotify`} loading="lazy" decoding="async" /></a>
+              {:else}<div class="artwork-placeholder" aria-hidden="true">&#9835;</div>{/if}
+              <span class="spotify-badge" aria-label="Contenuto da Spotify"><svg class="spotify-mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor" /><path d="M6.5 9.2c3.8-1.1 7.7-.6 11.2 1.4M7.4 12.3c3.1-.8 6.3-.4 9.1 1.2M8.3 15.2c2.4-.6 4.9-.2 7 1" fill="none" stroke="#1ed760" stroke-width="1.7" stroke-linecap="round" /></svg> Spotify</span>
+            </div>
+            <button class="entity-main" onclick={() => open(item)} aria-label={`${item.name} ${item.artists.join(', ')}`}>
+              <span class="entity-title ellipsis">{item.name}</span>
+              <span class="entity-sub ellipsis">{item.kind === 'track' || item.kind === 'album' ? item.artists.join(', ') : item.kind === 'artist' ? 'Artista' : 'Playlist'}{item.trackCount !== undefined ? ` | ${item.trackCount} brani` : ''}</span>
+            </button>
+            <a class="spotify-link" href={item.externalUrl} target="_blank" rel="noopener noreferrer">Apri su Spotify</a>
+          </li>
+        {/each}
+      </ul>
       {#if nextOffset !== null}<button class="btn btn-secondary" onclick={() => load(true)} disabled={loading}>Altri risultati Spotify</button>{/if}
     {/if}
   {/if}
 </section>
-<style>.spotify-browser { display:grid; gap:1rem; margin-top:2rem; padding-bottom:2rem; } form, li, details { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; } ul, ol { display:grid; gap:1rem; padding:0; list-style:none; } button, select { min-height:44px; } a { color:var(--accent); } img { border-radius:.5rem; object-fit:cover; }</style>
+<style>
+  .spotify-browser { display:grid; gap:var(--space-3); padding-bottom:var(--space-4); }
+  form, li:not(.entity-card), details { display:flex; gap:var(--space-2); flex-wrap:wrap; align-items:center; }
+  ul, ol { display:grid; gap:var(--space-2); padding:0; list-style:none; }
+  button, select { min-height:44px; }
+  a { color:var(--accent); }
+  .entity-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:var(--space-2); }
+  .entity-card { display:grid; align-content:start; gap:var(--space-1); min-width:0; padding:var(--space-2); border-radius:var(--radius-m); background:var(--surface-3); }
+  .artwork { position:relative; aspect-ratio:1; overflow:hidden; border-radius:var(--radius-s); background:var(--surface-2); }
+  .artwork img, .artwork-placeholder { display:block; width:100%; height:100%; object-fit:cover; }
+  .artwork-placeholder { display:grid; place-items:center; color:var(--text-2); font-size:2.5rem; }
+  .spotify-badge { position:absolute; top:var(--space-1); right:var(--space-1); display:inline-flex; align-items:center; gap:4px; min-height:24px; padding:0 8px; border-radius:var(--radius-pill); color:#10110f; background:#1ed760; font-size:var(--fs-xs); font-weight:700; box-shadow:0 1px 4px #0008; }
+  .spotify-mark { display:block; width:18px; height:18px; color:#10110f; flex:none; }
+  .artwork-link { display:block; width:100%; height:100%; }
+  .entity-main { display:grid; gap:2px; min-width:0; min-height:52px; padding:var(--space-1) 0; text-align:left; }
+  .entity-title { font-size:var(--fs-s); font-weight:700; }
+  .entity-sub { color:var(--text-2); font-size:var(--fs-xs); }
+  .spotify-link { width:fit-content; font-size:var(--fs-xs); }
+  .entity-card:active { background:var(--surface-hover); }
+  @media (min-width:640px) { .entity-grid { grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:var(--space-3); } }
+  @media (prefers-reduced-motion: no-preference) { .entity-card { transition:background-color 120ms ease; } }
+  @media (forced-colors:active) { .spotify-badge { border:1px solid ButtonText; } }
+</style>

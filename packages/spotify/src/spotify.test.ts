@@ -21,6 +21,7 @@ const config = (): SpotifyConfig => ({
 });
 const scopes = [
   'user-read-private',
+  'user-read-email',
   'streaming',
   'user-read-playback-state',
   'user-modify-playback-state',
@@ -143,6 +144,31 @@ describe('PKCE and ownership', () => {
     expect((await ctx.store.get('u'))?.accountId).toBe('stable-account');
     expect(await ctx.service.callback('u', 'session', q)).toBe('failed');
   });
+  it('base library authorization keeps account identity scopes separate from email', async () => {
+    const ctx = context(oauth());
+    const { u } = await attempt(ctx);
+    const requested = u.searchParams.get('scope')!.split(' ');
+    expect(requested).toContain('user-read-private');
+    expect(requested).toContain('user-library-read');
+    expect(requested).not.toContain('user-read-email');
+  });
+  it('playback authorization adds email and all SDK scopes while retaining library grants', async () => {
+    const ctx = context(oauth());
+    await seed(ctx, 'u', { scopes: ['user-read-private', 'user-library-read', 'playlist-read-private'] });
+    const { url } = await ctx.service.link('u', 'session', 'playback');
+    const requested = new URL(url).searchParams.get('scope')!.split(' ');
+    expect(requested).toEqual(
+      expect.arrayContaining([
+        'user-read-private',
+        'user-library-read',
+        'playlist-read-private',
+        'user-read-email',
+        'streaming',
+        'user-read-playback-state',
+        'user-modify-playback-state',
+      ]),
+    );
+  });
   it('expired, denied and unlink-fenced pending never exchange credentials', async () => {
     const f = oauth();
     const ctx = context(f);
@@ -258,6 +284,28 @@ describe('token lifecycle', () => {
     const ctx = context();
     await seed(ctx, 'u', { entitlement: 'non-premium' });
     expect((await ctx.service.status('u')).capabilities.canStream).toBe(false);
+  });
+  it('does not advertise playback for incomplete grants and enables it after the complete upgrade', async () => {
+    const ctx = context();
+    ctx.c.hybridPlayback = true;
+    const required = [
+      'user-read-private',
+      'user-read-email',
+      'streaming',
+      'user-read-playback-state',
+      'user-modify-playback-state',
+    ];
+    await seed(ctx, 'u', { scopes: required.filter((scope) => scope !== 'user-read-email') });
+    expect((await ctx.service.status('u')).capabilities).toMatchObject({
+      canStream: false,
+      canHybridPlayback: false,
+    });
+    const upgraded = { ...(await ctx.store.get('u'))!, scopes: required, version: 2 };
+    expect(await ctx.store.save(upgraded, 1)).toBe(true);
+    expect((await ctx.service.status('u')).capabilities).toMatchObject({
+      canStream: true,
+      canHybridPlayback: true,
+    });
   });
 });
 describe('REST boundaries', () => {

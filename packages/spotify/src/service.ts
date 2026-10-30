@@ -21,12 +21,19 @@ const profileSchema = z.object({
   display_name: z.string().nullable().optional(),
   product: z.string().optional(),
 });
+const playbackScopes = [
+  'user-read-private',
+  'user-read-email',
+  'streaming',
+  'user-read-playback-state',
+  'user-modify-playback-state',
+];
 const scopeSets: Record<string, string[]> = {
   profile: [],
   library: ['playlist-read-private', 'playlist-read-collaborative', 'user-library-read'],
   'playlist-write': ['playlist-modify-private', 'playlist-modify-public'],
   'library-write': ['user-library-modify'],
-  playback: ['streaming', 'user-read-playback-state', 'user-modify-playback-state'],
+  playback: playbackScopes,
 };
 /** Six calendar months, clamped to the final day for month-end authorizations. */
 export function authorizationExpiresAt(authorizedAt: number): number {
@@ -70,6 +77,11 @@ export class SpotifyService {
       ['live', 'fake'].includes(this.config.mode) &&
       (this.config.mode === 'fake' || this.config.policyResolved);
     const linked = !!l && !l.reauth;
+    const canStream =
+      enabled &&
+      linked &&
+      l?.entitlement !== 'non-premium' &&
+      playbackScopes.every((scope) => l?.scopes.includes(scope));
     return {
       mode: this.config.mode,
       linkState: l ? (l.reauth ? 'reauth-required' : 'linked') : 'unlinked',
@@ -87,15 +99,10 @@ export class SpotifyService {
           !!l?.scopes.some(
             (scope) => scope === 'playlist-modify-private' || scope === 'playlist-modify-public',
           ),
-        canStream: enabled && linked && l?.entitlement !== 'non-premium' && !!l?.scopes.includes('streaming'),
+        canStream,
         canDownload: false,
         canEditTags: false,
-        canHybridPlayback:
-          enabled &&
-          linked &&
-          l?.entitlement !== 'non-premium' &&
-          !!l?.scopes.includes('streaming') &&
-          this.config.hybridPlayback,
+        canHybridPlayback: canStream && this.config.hybridPlayback,
       },
       ...(!enabled ? { reason: this.config.mode === 'live' ? E.PolicyDisabled : E.NotConfigured } : {}),
     };

@@ -57,6 +57,8 @@ Alternativa: PKCE nel browser con refresh token persistente. Scartata per protez
 
 Scope secondo la [reference ufficiale](https://developer.spotify.com/documentation/web-api/concepts/scopes): linking/profilo `user-read-private`; consultazione `playlist-read-private`, `playlist-read-collaborative`, `user-library-read`; scrittura su scelta dell'utente `playlist-modify-private`, `playlist-modify-public`, `user-library-modify`; playback `streaming`, `user-read-playback-state`, `user-modify-playback-state`, con `user-read-currently-playing` soltanto per API che lo richiedono. Non richiedere history, top, follow o upload immagini. Verificare gli eventuali requisiti aggiuntivi correnti del SDK prima di allargare gli scope; mai usare l'email come identità.
 
+Verifica del 30 ottobre 2026: il [tutorial ufficiale del player SDK](https://developer.spotify.com/documentation/web-playback-sdk/howtos/web-app-player) richiede anche `user-read-email`. Si aggiunge esclusivamente al consenso incrementale di playback, senza leggere o conservare l'email come dato applicativo. Le capacità di riproduzione richiedono tutti gli scope SDK e di controllo; un collegamento precedente con permessi parziali conserva la lettura della libreria e deve completare il consenso di playback. Le impostazioni distinguono permessi già concessi, autorizzazione in corso ed errori e indicano il passo successivo per scegliere il player.
+
 DTO di stato separa:
 
 - link: `unlinked | linked | reauth-required`;

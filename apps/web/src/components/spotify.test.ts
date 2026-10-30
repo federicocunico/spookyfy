@@ -152,6 +152,46 @@ test('Premium unknown stays explicit and linking requires local authentication +
   expect(link).toHaveBeenCalledWith('library');
 });
 
+test('playback authorization shows pending feedback, reports failure and permits a retry', async () => {
+  let reject!: (reason: Error) => void;
+  const link = vi.spyOn(s.spotify, 'link').mockImplementation(
+    () =>
+      new Promise<void>((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  render(SpotifySettings);
+  const button = screen.getByRole('button', { name: 'Autorizza riproduzione Spotify' });
+  await fireEvent.click(button);
+  expect(link).toHaveBeenCalledWith('playback');
+  expect(button).toBeDisabled();
+  expect(screen.getByText('Apertura di Spotify per autorizzare la funzione…')).toBeInTheDocument();
+  reject(new Error('Spotify non raggiungibile. Riprova.'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Spotify non raggiungibile. Riprova.');
+  expect(button).toBeEnabled();
+  expect(screen.queryByText('Riproduzione Spotify autorizzata.')).not.toBeInTheDocument();
+});
+
+test('a completed playback grant shows confirmation and the next step instead of asking again', async () => {
+  s.spotify.status = {
+    ...status,
+    scopes: [
+      'user-read-private',
+      'user-read-email',
+      'streaming',
+      'user-read-playback-state',
+      'user-modify-playback-state',
+    ],
+  };
+  const link = vi.spyOn(s.spotify, 'link');
+  render(SpotifySettings);
+  expect(screen.getByText('Riproduzione Spotify autorizzata.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Autorizza riproduzione Spotify' })).not.toBeInTheDocument();
+  await fireEvent.click(screen.getByRole('button', { name: 'Apri libreria Spotify' }));
+  expect(s.router.route.path).toBe('/spotify');
+  expect(link).not.toHaveBeenCalled();
+});
+
 test('native rename preserves existing description and visibility unless explicitly edited', async () => {
   const playlist = {
     ...entity('Existing playlist', 'playlist'),
