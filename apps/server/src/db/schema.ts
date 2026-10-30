@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   type AnySQLiteColumn,
+  check,
   index,
   integer,
   primaryKey,
@@ -209,3 +211,83 @@ export const accessTokens = sqliteTable(
   },
   (t) => [index('access_tokens_user_idx').on(t.userId)],
 );
+
+export const hybridPlaylists = sqliteTable(
+  'hybrid_playlists',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('hybrid_playlists_owner_idx').on(t.ownerId)],
+);
+export const hybridPlaylistItems = sqliteTable(
+  'hybrid_playlist_items',
+  {
+    id: text('id').primaryKey(),
+    playlistId: text('playlist_id')
+      .notNull()
+      .references(() => hybridPlaylists.id, { onDelete: 'cascade' }),
+    provider: text('provider', { enum: ['local', 'spotify'] }).notNull(),
+    trackId: text('track_id').references(() => tracks.id, { onDelete: 'cascade' }),
+    uri: text('uri'),
+    spotifyAccountId: text('spotify_account_id'),
+    position: real('position').notNull(),
+    addedAt: integer('added_at').notNull(),
+  },
+  (t) => [
+    index('hybrid_items_order_idx').on(t.playlistId, t.position),
+    check(
+      'hybrid_item_reference',
+      sql`(${t.provider}='local' AND ${t.trackId} IS NOT NULL AND ${t.uri} IS NULL AND ${t.spotifyAccountId} IS NULL) OR (${t.provider}='spotify' AND ${t.trackId} IS NULL AND ${t.uri} GLOB 'spotify:track:*' AND length(${t.uri})=36 AND substr(${t.uri},15) NOT GLOB '*[^A-Za-z0-9]*' AND ${t.spotifyAccountId} IS NOT NULL)`,
+    ),
+  ],
+);
+export const spotifyLinks = sqliteTable('spotify_links', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').notNull().unique(),
+  envelope: text('envelope').notNull(),
+  scopes: text('scopes').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  authorizedAt: integer('authorized_at').notNull(),
+  version: integer('version').notNull().default(0),
+  generation: integer('generation').notNull().default(0),
+  displayName: text('display_name'),
+  entitlement: text('entitlement').notNull().default('unknown'),
+  reauth: integer('reauth').notNull().default(0),
+});
+export const spotifyOauthAttempts = sqliteTable('spotify_oauth_attempts', {
+  stateHash: text('state_hash').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  sessionHash: text('session_hash').notNull(),
+  protectedVerifier: text('protected_verifier').notNull(),
+  redirectUri: text('redirect_uri').notNull(),
+  scopes: text('scopes').notNull(),
+  generation: integer('generation').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+});
+export const spotifyGenerations = sqliteTable('spotify_generations', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  generation: integer('generation').notNull().default(0),
+});
+export const spotifyLeases = sqliteTable('spotify_leases', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  owner: text('owner').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+});
+export const spotifyRuntime = sqliteTable('spotify_runtime', {
+  key: text('key').primaryKey(),
+  value: integer('value').notNull(),
+});

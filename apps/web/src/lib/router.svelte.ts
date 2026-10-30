@@ -1,5 +1,7 @@
 export type RouteName =
   | 'home'
+  | 'spotify'
+  | 'hybrid'
   | 'search'
   | 'library'
   | 'downloaded'
@@ -24,6 +26,8 @@ export interface Route {
 export type Overlay = 'player';
 
 const TABLE: [RouteName, RegExp][] = [
+  ['spotify', /^\/spotify$/],
+  ['hybrid', /^\/collections$/],
   ['home', /^\/$/],
   ['search', /^\/search$/],
   ['library', /^\/library$/],
@@ -57,6 +61,8 @@ export function matchRoute(url: string): Route {
 }
 
 export const pathOf = {
+  spotify: () => '/spotify',
+  hybrid: () => '/collections',
   home: () => '/',
   search: () => '/search',
   library: () => '/library',

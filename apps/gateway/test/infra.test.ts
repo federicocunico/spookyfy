@@ -9,9 +9,9 @@ import { checkFunctions } from '../scripts/count-functions.mjs';
 import { FakeClock } from './helpers.js';
 
 describe('budget di funzioni', () => {
-  test('il gateway attuale usa 7 funzioni su 12', () => {
+  test('il gateway attuale usa 8 funzioni su 12', () => {
     const r = checkFunctions(path.resolve(import.meta.dirname, '../api'));
-    expect(r).toMatchObject({ ok: true, count: 7, max: 12 });
+    expect(r).toMatchObject({ ok: true, count: 8, max: 12 });
     expect(r.functions).toEqual([
       'audio/[id].ts',
       'auth/[action].ts',
@@ -20,6 +20,7 @@ describe('budget di funzioni', () => {
       'lookup/[action].ts',
       'meta/[id].ts',
       'search.ts',
+      'spotify/[action].ts',
     ]);
   });
 

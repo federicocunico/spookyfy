@@ -6,9 +6,12 @@ import Icon from './Icon.svelte';
 import Marquee from './Marquee.svelte';
 import ScrubBar from './ScrubBar.svelte';
 
-const { player, router, library, toasts, ui, mode } = services();
-const open = $derived(router.overlay === 'player' && player.current !== null);
+const { player, router, library, toasts, ui, mode, spotify } = services();
+const open = $derived(router.overlay === 'player' && player.current !== null && !spotify.active);
 const track = $derived(player.current);
+const hybrid = $derived(spotify.occurrences.length > 0);
+const shuffle = $derived(hybrid ? spotify.shuffle : player.shuffle);
+const repeat = $derived(hybrid ? spotify.repeat : player.repeat);
 
 // Trascinamento verso il basso per chiudere: il pannello segue il dito.
 const CLOSE_DISTANCE = 120;
@@ -67,7 +70,7 @@ async function toggleFavorite() {
       <button class="icon-btn" aria-label="Chiudi il player" onclick={() => router.closeOverlay()}>
         <Icon name="chevron-down" size={28} />
       </button>
-      <span class="context">In riproduzione</span>
+      <span class="context">{hybrid ? 'Raccolta Spookyfy · File locale' : 'In riproduzione · File locale'}</span>
       <button class="icon-btn" aria-label="Altre azioni" onclick={() => (ui.menu = { track })}>
         <Icon name="more" />
       </button>
@@ -98,9 +101,9 @@ async function toggleFavorite() {
     <div class="controls">
       <button
         class="icon-btn"
-        class:on={player.shuffle}
+        class:on={shuffle}
         aria-label="Shuffle"
-        aria-pressed={player.shuffle}
+        aria-pressed={shuffle}
         onclick={() => player.toggleShuffle()}
       >
         <Icon name="shuffle" />
@@ -116,12 +119,12 @@ async function toggleFavorite() {
       </button>
       <button
         class="icon-btn"
-        class:on={player.repeat !== 'off'}
-        aria-label={player.repeat === 'one' ? 'Ripeti brano' : player.repeat === 'all' ? 'Ripeti coda' : 'Ripeti disattivato'}
-        aria-pressed={player.repeat !== 'off'}
+        class:on={repeat !== 'off'}
+        aria-label={repeat === 'one' ? 'Ripeti brano' : repeat === 'all' ? 'Ripeti coda' : 'Ripeti disattivato'}
+        aria-pressed={repeat !== 'off'}
         onclick={() => player.cycleRepeat()}
       >
-        <Icon name={player.repeat === 'one' ? 'repeat-one' : 'repeat'} />
+        <Icon name={repeat === 'one' ? 'repeat-one' : 'repeat'} />
       </button>
     </div>
 

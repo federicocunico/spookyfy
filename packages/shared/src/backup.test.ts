@@ -93,3 +93,56 @@ describe('album e generi nel backup', () => {
     ).toBe(1);
   });
 });
+
+import { backupHybridCollectionsSchema } from './backup.js';
+
+const ref = { provider: 'spotify', uri: 'spotify:track:0123456789012345678901' };
+const collection = {
+  id: 'p',
+  name: 'Mixed',
+  createdAt: 1,
+  updatedAt: 1,
+  items: [{ itemId: 'i', ref, addedAt: 1, spotifyAccountId: 'synthetic' }],
+};
+test('v1 portable extension is optional and accepts references without secret metadata', () => {
+  expect(backupLibrarySchema.safeParse({ tracks: [], favorites: [], playlists: [], plays: [] }).success).toBe(
+    true,
+  );
+  expect(backupHybridCollectionsSchema.safeParse({ version: 1, collections: [collection] }).success).toBe(
+    true,
+  );
+  expect(
+    backupHybridCollectionsSchema.safeParse({
+      version: 1,
+      collections: [{ ...collection, accessToken: 'secret' }],
+    }).success,
+  ).toBe(false);
+});
+test('reject duplicate occurrence IDs, mixed ref data, missing account and absent local track', () => {
+  for (const items of [
+    [...collection.items, ...collection.items],
+    [{ ...collection.items[0], ref: { ...ref, trackId: 'local' } }],
+    [{ itemId: 'i', ref, addedAt: 1 }],
+  ])
+    expect(
+      backupHybridCollectionsSchema.safeParse({ version: 1, collections: [{ ...collection, items }] })
+        .success,
+    ).toBe(false);
+  expect(
+    backupLibrarySchema.safeParse({
+      tracks: [],
+      favorites: [],
+      playlists: [],
+      plays: [],
+      hybridCollections: {
+        version: 1,
+        collections: [
+          {
+            ...collection,
+            items: [{ itemId: 'i', ref: { provider: 'local', trackId: 'missing' }, addedAt: 1 }],
+          },
+        ],
+      },
+    }).success,
+  ).toBe(false);
+});

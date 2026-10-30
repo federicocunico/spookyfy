@@ -19,6 +19,7 @@
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
     "@spookyfy/shared": "workspace:*",
+    "@spookyfy/spotify": "workspace:*",
     "@upstash/redis": "^1.40.0",
     "jose": "^6.2.13",
     "redis": "^5.8.0",

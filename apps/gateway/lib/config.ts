@@ -1,3 +1,4 @@
+import { type SpotifyConfig, spotifyConfig } from '@spookyfy/spotify';
 import { z } from 'zod';
 
 export const DEFAULT_REGISTRATION_TOKEN = 'spotifymerdacostosa2026';
@@ -70,6 +71,7 @@ export function kvConfigFromEnv(env: KvEnv): KvConfig | null {
 }
 
 export interface GatewayConfig {
+  spotify?: SpotifyConfig;
   nodeEnv: 'development' | 'production' | 'test';
   sessionSecret: string;
   registrationToken: string;
@@ -99,6 +101,7 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     throw new GatewayConfigError(r.error.issues.map((i) => `${i.path.join('.') || 'env'}: ${i.message}`));
   const e = r.data;
   return {
+    spotify: spotifyConfig(env),
     nodeEnv: e.NODE_ENV,
     sessionSecret: e.SESSION_SECRET,
     registrationToken: e.REGISTRATION_TOKEN,

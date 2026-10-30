@@ -16,6 +16,16 @@ describe.skipIf(!url)('RedisKv su Redis reale', () => {
       expect(await kv.set(`${p}:a`, { n: 1, s: 'x' }, { nx: true })).toBe(true);
       expect(await kv.set(`${p}:a`, { n: 2 }, { nx: true })).toBe(false);
       expect(await kv.get(`${p}:a`)).toEqual({ n: 1, s: 'x' });
+      // Fencing is an EVAL CAS, shared by independent serverless instances.
+      expect(await kv.compareAndSet(`${p}:a`, { n: 9 }, { n: 2 })).toBe(false);
+      const claims = await Promise.all([
+        kv.compareAndSet(`${p}:claim`, null, { owner: 'one' }),
+        kv.compareAndSet(`${p}:claim`, null, { owner: 'two' }),
+      ]);
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      const winner = await kv.get(`${p}:claim`);
+      expect(await kv.compareAndSet(`${p}:claim`, winner, null)).toBe(true);
+      expect(await kv.get(`${p}:claim`)).toBeNull();
 
       expect(await kv.set(`${p}:b`, 1, { exSeconds: 30 })).toBe(true);
       expect(await kv.mget(`${p}:a`, `${p}:b`, `${p}:none`)).toEqual([{ n: 1, s: 'x' }, 1, null]);

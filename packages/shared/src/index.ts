@@ -7,4 +7,5 @@ export * from './library.js';
 export * from './lookup/index.js';
 export * from './metadata.js';
 export * from './modes.js';
+export * from './providers.js';
 export * from './silence.js';

@@ -46,4 +46,16 @@ Stesso formato di esito, con l'app aperta dall'URL del progetto Vercel e install
 
 ## Problemi riscontrati
 
+### Spotify: verifiche fisiche ancora da eseguire
+
+Le prove simulate del controller/SDK non attestano streaming o continuità su iPhone. Lasciare l'integrazione reale disattivata fino alla verifica della policy e alla configurazione autorizzata.
+
+- [ ] Safari e PWA installata: collegamento successivo al login Spookyfy; consenso negato, scope aggiuntivi e Premium non verificabile mostrati separatamente.
+- [ ] Attivare esplicitamente il player browser, scegliere il dispositivo, quindi premere Riproduci. Dopo caricamento/trasferimento verificare il nuovo gesto richiesto e `activateElement`; nessun autoplay dichiarato riuscito sulla sola risposta 204.
+- [ ] File locale → Spotify → file locale: un solo audio; pausa remota non confermata blocca l'avvio locale e offre recupero esplicito. Riprovare con dispositivo Connect esterno irraggiungibile.
+- [ ] Schermo bloccato, cuffie, interruzione telefonica, background e riapertura: metadati/azioni del solo motore attivo; non estendere le garanzie del motore locale al SDK.
+- [ ] Volume Spotify iOS sotto controllo fisico; documentare i limiti effettivi senza promettere controllo JavaScript.
+- [ ] Modalità aereo: Spotify online non scaricabile; raccolte riproducono soltanto file locali disponibili e indicano gli esclusi. Logout/unlink eliminano token in memoria e stato personale.
+- [ ] Ripristino raccolta sempre in pausa, senza trasferire automaticamente un dispositivo Spotify esterno; riferimenti restaurati richiedono riconciliazione.
+
 _Nessuno ancora._

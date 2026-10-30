@@ -12,6 +12,10 @@ export const systemClock: Clock = { now: () => Date.now() };
  * sessione e contatori anti-brute-force. Nessun dato musicale.
  */
 export interface Kv {
+  /** Compare exact JSON value and replace/delete atomically across instances. */
+  compareAndSet(key: string, expected: unknown | null, value: unknown | null): Promise<boolean>;
+  /** Atomically free an exact account record and its username listing. */
+  compareAndDeleteMember(key: string, expected: unknown, setKey: string, member: string): Promise<boolean>;
   get<T>(key: string): Promise<T | null>;
   mget<T extends unknown[]>(...keys: string[]): Promise<{ [K in keyof T]: T[K] | null }>;
   /** true se il valore è stato scritto (con `nx`: solo se la chiave non esisteva). */
@@ -30,6 +34,24 @@ export class UpstashKv implements Kv {
   private readonly redis: Redis;
   constructor(url: string, token: string) {
     this.redis = new Redis({ url, token });
+  }
+  async compareAndSet(key: string, expected: unknown | null, value: unknown | null) {
+    return (
+      Number(
+        await this.redis.eval(
+          CAS_SCRIPT,
+          [key],
+          [expected === null ? '' : JSON.stringify(expected), value === null ? '' : JSON.stringify(value)],
+        ),
+      ) === 1
+    );
+  }
+  async compareAndDeleteMember(key: string, expected: unknown, setKey: string, member: string) {
+    return (
+      Number(
+        await this.redis.eval(DELETE_MEMBER_SCRIPT, [key, setKey], [JSON.stringify(expected), member]),
+      ) === 1
+    );
   }
   get<T>(key: string) {
     return this.redis.get<T>(key);
@@ -91,6 +113,29 @@ export class RedisKv implements Kv {
     }
     return this.client;
   }
+  async compareAndSet(key: string, expected: unknown | null, value: unknown | null) {
+    return (
+      Number(
+        await (await this.c()).eval(CAS_SCRIPT, {
+          keys: [key],
+          arguments: [
+            expected === null ? '' : JSON.stringify(expected),
+            value === null ? '' : JSON.stringify(value),
+          ],
+        }),
+      ) === 1
+    );
+  }
+  async compareAndDeleteMember(key: string, expected: unknown, setKey: string, member: string) {
+    return (
+      Number(
+        await (await this.c()).eval(DELETE_MEMBER_SCRIPT, {
+          keys: [key, setKey],
+          arguments: [JSON.stringify(expected), member],
+        }),
+      ) === 1
+    );
+  }
   async get<T>(key: string) {
     return parse<T>(await (await this.c()).get(key));
   }
@@ -148,6 +193,24 @@ interface Entry {
 export class MemoryKv implements Kv {
   private readonly data = new Map<string, Entry>();
   constructor(private readonly clock: Clock = systemClock) {}
+  async compareAndSet(key: string, expected: unknown | null, value: unknown | null) {
+    const old = this.live(key)?.value ?? null;
+    if (JSON.stringify(old) !== JSON.stringify(expected)) return false;
+    if (value === null) this.data.delete(key);
+    else this.data.set(key, { value: structuredClone(value), expiresAt: null });
+    return true;
+  }
+  async compareAndDeleteMember(key: string, expected: unknown, setKey: string, member: string) {
+    if (JSON.stringify(this.live(key)?.value ?? null) !== JSON.stringify(expected)) return false;
+    this.data.delete(key);
+    const entry = this.live(setKey);
+    if (entry)
+      this.data.set(setKey, {
+        ...entry,
+        value: (entry.value as string[]).filter((value) => value !== member),
+      });
+    return true;
+  }
 
   private live(key: string): Entry | undefined {
     const e = this.data.get(key);
@@ -206,3 +269,5 @@ export class MemoryKv implements Kv {
     return [...((this.live(key)?.value as string[] | undefined) ?? [])];
   }
 }
+const CAS_SCRIPT = `local old=redis.call('GET',KEYS[1]); if (not old and ARGV[1]~='') or (old and old~=ARGV[1]) then return 0 end; if ARGV[2]=='' then redis.call('DEL',KEYS[1]) else redis.call('SET',KEYS[1],ARGV[2]) end; return 1`;
+const DELETE_MEMBER_SCRIPT = `local old=redis.call('GET',KEYS[1]); if not old or old~=ARGV[1] then return 0 end; redis.call('DEL',KEYS[1]); redis.call('SREM',KEYS[2],ARGV[2]); return 1`;

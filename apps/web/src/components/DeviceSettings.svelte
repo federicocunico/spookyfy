@@ -61,7 +61,10 @@ async function doExport(includeAudio: boolean) {
       toasts.show(
         `Backup di ${formatBytes(plan.audioBytes)} in ${pluralize(plan.parts + 1, 'file', 'file')}…`,
       );
-    const files = await exportBackup({ db, library: device.library }, includeAudio);
+    const files = await exportBackup(
+      { db, library: device.library, hybrid: services().deviceHybrid },
+      includeAudio,
+    );
     await deliverFiles(files);
     await refresh();
     toasts.show('Backup esportato');
@@ -77,7 +80,7 @@ async function doImport() {
   if (files.length === 0) return;
   busy = 'import';
   try {
-    const r = await importBackup({ db, library: device.library }, files);
+    const r = await importBackup({ db, library: device.library, hybrid: services().deviceHybrid }, files);
     toasts.show(
       `Backup importato: ${pluralize(r.added, 'brano aggiunto', 'brani aggiunti')}${r.missingAudio ? `, ${r.missingAudio} da riscaricare` : ''}${r.skipped ? `, ${r.skipped} già presenti` : ''}`,
     );

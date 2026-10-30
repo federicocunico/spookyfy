@@ -23,6 +23,9 @@ test('apertura su un database nuovo: tutti gli store e gli indici', async () => 
       'imports',
       'settings',
       'libAlbums',
+      'hybridPlaylists',
+      'hybridItems',
+      'hybridLinks',
     ].sort(),
   );
   expect([...db.transaction('downloadQueue').store.indexNames]).toEqual(['byEnqueued']);
@@ -57,7 +60,6 @@ test('migrazione: dall’ultima versione a una successiva i dati restano e la nu
     expect(await v2.get('downloads', 't1')).toMatchObject({ trackId: 't1' });
     v2.close();
   } finally {
-    // biome-ignore lint/performance/noDelete: la chiave va rimossa, non solo azzerata
     delete MIGRATIONS[next];
   }
 });
@@ -198,3 +200,37 @@ test('migrazione v2 → v3: i brani con album vengono raggruppati, gli altri res
   expect(c?.albumId).toBeUndefined();
   v3.close();
 });
+
+test.each([1, 2, 3])(
+  'v%d upgrades additively to v4 with cached downloads and playlists intact',
+  async (version) => {
+    const name = uniqueName();
+    const old = await openSpookyfyDb(name, version);
+    await old.put('downloads', { trackId: 'cached', sizeBytes: 7, downloadedAt: 1 });
+    if (version >= 2) {
+      await old.put('libPlaylists', { id: 'legacy', name: 'Legacy', createdAt: 1, updatedAt: 1 });
+      await old.put('libPlaylistItems', {
+        id: 'occ',
+        playlistId: 'legacy',
+        trackId: 't',
+        position: 1,
+        addedAt: 1,
+      });
+    }
+    old.close();
+    const upgraded = await openSpookyfyDb(name);
+    expect(upgraded.version).toBe(4);
+    expect(await upgraded.get('downloads', 'cached')).toEqual({
+      trackId: 'cached',
+      sizeBytes: 7,
+      downloadedAt: 1,
+    });
+    expect(await upgraded.count('hybridPlaylists')).toBe(0);
+    expect(await upgraded.count('hybridItems')).toBe(0);
+    if (version >= 2) {
+      expect(await upgraded.get('libPlaylists', 'legacy')).toMatchObject({ name: 'Legacy' });
+      expect(await upgraded.get('libPlaylistItems', 'occ')).toMatchObject({ trackId: 't' });
+    }
+    upgraded.close();
+  },
+);

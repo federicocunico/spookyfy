@@ -1,5 +1,6 @@
 import type {
   FavoriteDto,
+  HybridPlaylistItemDto,
   MeDto,
   PlayEvent,
   PlaylistDto,
@@ -125,6 +126,17 @@ export interface DeviceSettings {
 }
 
 export interface SpookyfyDB extends DBSchema {
+  hybridPlaylists: {
+    key: [string, string];
+    value: { ownerId: string; id: string; name: string; createdAt: number; updatedAt: number };
+    indexes: { byOwner: string };
+  };
+  hybridItems: {
+    key: [string, string, string];
+    value: HybridPlaylistItemDto & { ownerId: string; playlistId: string; position: number };
+    indexes: { byPlaylist: [string, string]; byOwner: string };
+  };
+  hybridLinks: { key: string; value: { ownerId: string; accountId: string | null; generation: number } };
   /** Metadati dei brani noti (scaricati o presenti in liste salvate offline). */
   tracks: { key: string; value: TrackDto };
   downloads: { key: string; value: DownloadRecord };
@@ -150,7 +162,7 @@ export interface SpookyfyDB extends DBSchema {
 }
 
 export const DB_NAME = 'spookyfy';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export type Db = IDBPDatabase<SpookyfyDB>;
 
@@ -165,6 +177,14 @@ export const MIGRATIONS: Record<
     tx: IDBPTransaction<SpookyfyDB, StoreNames<SpookyfyDB>[], 'versionchange'>,
   ) => void
 > = {
+  4: (db) => {
+    const playlists = db.createObjectStore('hybridPlaylists', { keyPath: ['ownerId', 'id'] });
+    playlists.createIndex('byOwner', 'ownerId');
+    const items = db.createObjectStore('hybridItems', { keyPath: ['ownerId', 'playlistId', 'itemId'] });
+    items.createIndex('byPlaylist', ['ownerId', 'playlistId']);
+    items.createIndex('byOwner', 'ownerId');
+    db.createObjectStore('hybridLinks', { keyPath: 'ownerId' });
+  },
   1: (db) => {
     db.createObjectStore('tracks', { keyPath: 'id' });
     db.createObjectStore('downloads', { keyPath: 'trackId' });

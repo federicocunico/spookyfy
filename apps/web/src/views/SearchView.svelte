@@ -4,6 +4,7 @@ import Cover from '../components/Cover.svelte';
 import Icon from '../components/Icon.svelte';
 import ImportFilesButton from '../components/ImportFilesButton.svelte';
 import RemoteResult from '../components/RemoteResult.svelte';
+import SpotifyBrowser from '../components/SpotifyBrowser.svelte';
 import TrackRow from '../components/TrackRow.svelte';
 import { ApiError } from '../lib/api';
 import { searchViaBridge } from '../lib/device/backend';
@@ -97,6 +98,7 @@ async function searchBridge() {
 
 <div class="page">
   <h1 class="page-title">Cerca</h1>
+  <SpotifyBrowser search />
   <form class="search" role="search" onsubmit={searchRemote}>
     <span class="icon"><Icon name="search" size={20} /></span>
     <input

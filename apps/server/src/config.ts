@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { type SpotifyConfig, spotifyConfig } from '@spookyfy/spotify';
 import { z } from 'zod';
 
 export const DEFAULT_REGISTRATION_TOKEN = 'spotifymerdacostosa2026';
@@ -73,6 +74,7 @@ const envSchema = z
   });
 
 export interface Config {
+  spotify?: SpotifyConfig;
   nodeEnv: 'development' | 'production' | 'test';
   logLevel: string;
   port: number;
@@ -136,6 +138,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
   }
   const e = parsed.data;
   return {
+    spotify: spotifyConfig(env),
     nodeEnv: e.NODE_ENV,
     logLevel: e.LOG_LEVEL,
     port: e.PORT,

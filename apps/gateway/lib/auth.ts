@@ -37,6 +37,8 @@ export interface UserRecord {
   createdAt: number;
   /** Incrementato a ogni cambio password: invalida tutte le sessioni. */
   epoch: number;
+  /** Retryable account deletion; never authenticates while cleanup is pending. */
+  deleting?: true;
 }
 
 const userKey = (username: string) => `spk:user:${normalizeUsername(username)}`;
@@ -103,7 +105,7 @@ export class GatewayUsers {
 
   async verify(username: string, password: string): Promise<UserRecord | null> {
     const user = await this.get(username);
-    if (!user) {
+    if (!user || user.deleting) {
       dummyHash ??= hash('spookyfy-dummy-password#1', ARGON);
       await verify(await dummyHash, password).catch(() => false);
       return null;
@@ -119,13 +121,17 @@ export class GatewayUsers {
         'password',
         p.error.issues.map((i) => i.message),
       );
-    const user = await this.get(username);
-    if (!user) throw new HttpError(404, ErrorCode.NotFound, `Utente ${username} non trovato`);
-    await this.kv.set(userKey(username), {
-      ...user,
-      passwordHash: await hash(password, ARGON),
-      epoch: user.epoch + 1,
-    });
+    const passwordHash = await hash(password, ARGON);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const user = await this.get(username);
+      if (!user || user.deleting)
+        throw new HttpError(404, ErrorCode.NotFound, `Utente ${username} non trovato`);
+      if (
+        await this.kv.compareAndSet(userKey(username), user, { ...user, passwordHash, epoch: user.epoch + 1 })
+      )
+        return;
+    }
+    throw new HttpError(503, ErrorCode.Internal, 'Account temporaneamente non disponibile');
   }
 
   async list(): Promise<UserRecord[]> {
@@ -135,10 +141,28 @@ export class GatewayUsers {
   }
 
   async delete(username: string): Promise<void> {
-    if (!(await this.kv.del(userKey(username)))) {
-      throw new HttpError(404, ErrorCode.NotFound, `Utente ${username} non trovato`);
+    let deleting: UserRecord | undefined;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const user = await this.get(username);
+      if (!user) throw new HttpError(404, ErrorCode.NotFound, `Utente ${username} non trovato`);
+      if (user.deleting) {
+        deleting = user;
+        break;
+      }
+      const tombstone: UserRecord = { ...user, deleting: true, epoch: user.epoch + 1 };
+      if (await this.kv.compareAndSet(userKey(username), user, tombstone)) {
+        deleting = tombstone;
+        break;
+      }
     }
-    await this.kv.srem(USERS_SET, normalizeUsername(username));
+    if (!deleting) throw new HttpError(503, ErrorCode.Internal, 'Account temporaneamente non disponibile');
+    const { KvSpotifyStore } = await import('./spotify-store.js');
+    // This second, provider-level tombstone fences requests authorized before
+    // the user tombstone, including attempts created after the generation bump.
+    await new KvSpotifyStore(this.kv).deleteUser(deleting.id);
+    // Exact record and listing are removed together: concurrent cleanup cannot
+    // remove the listing of a later registration reusing this username.
+    await this.kv.compareAndDeleteMember(userKey(username), deleting, USERS_SET, normalizeUsername(username));
   }
 }
 
@@ -167,12 +191,21 @@ export class GatewaySessions {
     return Math.floor(this.clock.now() / 1000);
   }
 
-  async issue(user: UserRecord): Promise<{ token: string; cookie: string }> {
+  async issue(user: UserRecord, sessionId?: string): Promise<{ token: string; cookie: string }> {
+    const current = await this.kv.get<UserRecord>(userKey(user.username));
+    if (
+      !current ||
+      current.deleting ||
+      user.deleting ||
+      current.id !== user.id ||
+      current.epoch !== user.epoch
+    )
+      throw new HttpError(401, ErrorCode.Unauthenticated, 'Sessione non valida o scaduta');
     const iat = this.nowS();
     const token = await new SignJWT({ usr: normalizeUsername(user.username), ep: user.epoch })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(user.id)
-      .setJti(randomBytes(12).toString('base64url'))
+      .setJti(sessionId ?? randomBytes(12).toString('base64url'))
       .setIssuedAt(iat)
       .setExpirationTime(iat + SESSION_TTL_S)
       .sign(this.key);
@@ -203,21 +236,25 @@ export class GatewaySessions {
   }
 
   /** Utente della sessione; `renewCookie` se il token va rinnovato. */
-  async validate(req: Request): Promise<{ user: UserRecord; renewCookie?: string } | null> {
+  async validate(
+    req: Request,
+  ): Promise<{ user: UserRecord; sessionId: string; renewCookie?: string } | null> {
     const c = await this.claims(cookies(req)[SESSION_COOKIE]);
     if (!c) return null;
     const [user, revoked] = await this.kv.mget<[UserRecord, number]>(`spk:user:${c.usr}`, revokedKey(c.jti));
-    if (!user || revoked || user.id !== c.sub || user.epoch !== c.ep) return null;
+    if (!user || user.deleting || revoked || user.id !== c.sub || user.epoch !== c.ep) return null;
     if (this.nowS() - c.iat >= RENEW_AFTER_S) {
-      const { cookie } = await this.issue(user);
-      return { user, renewCookie: cookie };
+      const { cookie } = await this.issue(user, c.jti);
+      return { user, sessionId: c.jti, renewCookie: cookie };
     }
-    return { user };
+    return { user, sessionId: c.jti };
   }
 
   async revoke(req: Request): Promise<void> {
     const c = await this.claims(cookies(req)[SESSION_COOKIE]);
-    if (c) await this.kv.set(revokedKey(c.jti), 1, { exSeconds: Math.max(1, c.exp - this.nowS()) });
+    // A renewed JWT keeps its session family ID. A previous token can revoke that
+    // family too, so retain revocation for the longest possible renewed lifetime.
+    if (c) await this.kv.set(revokedKey(c.jti), 1, { exSeconds: SESSION_TTL_S });
   }
 }
 
@@ -274,12 +311,12 @@ export function authServices(d: AuthDeps) {
 export async function requireUser(
   req: Request,
   d: AuthDeps,
-): Promise<{ user: UserRecord; headers: Headers }> {
+): Promise<{ user: UserRecord; sessionId: string; headers: Headers }> {
   const s = await authServices(d).sessions.validate(req);
   if (!s) throw new HttpError(401, ErrorCode.Unauthenticated, 'Sessione non valida o scaduta');
   const headers = new Headers();
   if (s.renewCookie) headers.append('set-cookie', s.renewCookie);
-  return { user: s.user, headers };
+  return { user: s.user, sessionId: s.sessionId, headers };
 }
 
 /** `api/auth/[action]`: login, logout, me, register. */

@@ -23,6 +23,7 @@ import {
 import { handle } from './lib/http.js';
 import { type Clock, type Kv, MemoryKv, systemClock } from './lib/kv.js';
 import { handleLookup } from './lib/lookup.js';
+import { handleSpotify } from './lib/spotify.js';
 import { FakeYoutube, fakeAudioOrigin } from './lib/youtube-fake.js';
 import { InnertubeYoutube } from './lib/youtube-innertube.js';
 import type { YoutubeClient } from './lib/youtube.js';
@@ -74,7 +75,9 @@ function toRequest(req: http.IncomingMessage, origin: string): Request {
     headers.set('x-forwarded-for', req.socket.remoteAddress ?? '127.0.0.1');
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
   const ac = new AbortController();
-  req.on('close', () => ac.abort());
+  // IncomingMessage close also fires after a normally consumed POST body.
+  // Only a premature request abort cancels the upstream operation.
+  req.on('aborted', () => ac.abort());
   return new Request(new URL(req.url ?? '/', origin), {
     method: req.method,
     headers,
@@ -142,6 +145,7 @@ export async function startDevServer(
     [/^\/api\/audio\/([^/]+)$/, (req, m) => handleAudio(req, decodeURIComponent(m[1]!), deps)],
     [/^\/api\/cover\/([^/]+)$/, (req, m) => handleCover(req, decodeURIComponent(m[1]!), deps)],
     [/^\/api\/lookup\/([^/]+)$/, (req, m) => handleLookup(req, m[1]!, deps)],
+    [/^\/api\/spotify\/([^/]+)$/, (req, m) => handleSpotify(req, m[1]!, deps)],
     [/^\/__fake-audio\/([^/]+)$/, async (req) => fakeAudioOrigin(req)],
   ];
 

@@ -46,4 +46,15 @@ Stesso formato di esito, con l'app aperta dall'URL del progetto Vercel e install
 
 ## Problemi riscontrati
 
+### Spotify: verifiche fisiche ancora da eseguire
+
+Test simulati e provider finto non costituiscono una prova di streaming su Android. Prima delle prove reali servono policy risolta e configurazione autorizzata.
+
+- [ ] Chrome e PWA: attivazione esplicita del SDK, scelta browser/Connect e nuovo gesto quando richiesto; distinguere Premium, autenticazione, browser incompatibile e dispositivo perso.
+- [ ] File locale → Spotify → locale, richieste sovrapposte e dispositivo remoto irraggiungibile: nessun doppio audio; il passaggio resta fermo quando la pausa non è confermata.
+- [ ] Background, schermo bloccato, cuffie, telefonata e riapertura: metadati, seek e azioni del solo motore attivo; annotare browser/versione e limiti osservati separatamente dal player locale.
+- [ ] Nessuna riattivazione o trasferimento automatico del vecchio dispositivo; ripristino della raccolta in pausa.
+- [ ] Modalità aereo e download raccolta: solo file locali, conteggio Spotify escluso; nessuna richiesta audio Spotify verso cache o service worker.
+- [ ] Logout/unlink, account locale diverso e tab multipli: nessun token/stato remoto del precedente utente; file locali preservati.
+
 _Nessuno ancora._

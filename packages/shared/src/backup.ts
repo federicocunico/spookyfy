@@ -1,4 +1,44 @@
 import { z } from 'zod';
+import { mediaRefSchema } from './providers.js';
+
+/** Portable references only; remote metadata and credentials are deliberately excluded. */
+export const backupHybridCollectionsSchema = z
+  .object({
+    version: z.literal(1),
+    collections: z.array(
+      z
+        .object({
+          id: z.string().min(1).max(64),
+          name: z.string().trim().min(1).max(100),
+          createdAt: z.number().int().nonnegative(),
+          updatedAt: z.number().int().nonnegative(),
+          items: z.array(
+            z
+              .object({
+                itemId: z.string().min(1).max(64),
+                ref: mediaRefSchema,
+                addedAt: z.number().int().nonnegative(),
+                spotifyAccountId: z.string().min(1).max(256).optional(),
+              })
+              .strict()
+              .superRefine((item, ctx) => {
+                if ((item.ref.provider === 'spotify') !== Boolean(item.spotifyAccountId))
+                  ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid remote account reference' });
+              }),
+          ),
+        })
+        .strict(),
+    ),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (new Set(value.collections.map((p) => p.id)).size !== value.collections.length)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate collection ID' });
+    for (const p of value.collections)
+      if (new Set(p.items.map((i) => i.itemId)).size !== p.items.length)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate occurrence ID' });
+  });
+export type BackupHybridCollections = z.infer<typeof backupHybridCollectionsSchema>;
 
 /** Formato del backup della libreria in modalità client (ZIP con JSON e copertine). */
 export const BACKUP_FORMAT = 'spookyfy-backup';
@@ -54,25 +94,37 @@ export const backupAlbumSchema = z.object({
 });
 export type BackupAlbum = z.infer<typeof backupAlbumSchema>;
 
-export const backupLibrarySchema = z.object({
-  tracks: z.array(backupTrackSchema),
-  favorites: z.array(z.object({ trackId: z.string(), createdAt: z.number().int() })),
-  playlists: z.array(
-    z.object({
-      id: z.string().min(1).max(64),
-      name: z.string().min(1).max(100),
-      createdAt: z.number().int(),
-      updatedAt: z.number().int(),
-      /** Id dei brani nell'ordine della playlist (duplicati ammessi). */
-      trackIds: z.array(z.string()),
-    }),
-  ),
-  plays: z.array(
-    z.object({ id: z.string().min(1).max(64), trackId: z.string(), playedAt: z.number().int() }),
-  ),
-  /** Album (assenti nei backup precedenti: i brani si raggruppano dal campo album). */
-  albums: z.array(backupAlbumSchema).optional(),
-});
+export const backupLibrarySchema = z
+  .object({
+    hybridCollections: backupHybridCollectionsSchema.optional(),
+    tracks: z.array(backupTrackSchema),
+    favorites: z.array(z.object({ trackId: z.string(), createdAt: z.number().int() })),
+    playlists: z.array(
+      z.object({
+        id: z.string().min(1).max(64),
+        name: z.string().min(1).max(100),
+        createdAt: z.number().int(),
+        updatedAt: z.number().int(),
+        /** Id dei brani nell'ordine della playlist (duplicati ammessi). */
+        trackIds: z.array(z.string()),
+      }),
+    ),
+    plays: z.array(
+      z.object({ id: z.string().min(1).max(64), trackId: z.string(), playedAt: z.number().int() }),
+    ),
+    /** Album (assenti nei backup precedenti: i brani si raggruppano dal campo album). */
+    albums: z.array(backupAlbumSchema).optional(),
+  })
+  .superRefine((library, ctx) => {
+    const tracks = new Set(library.tracks.map((track) => track.id));
+    for (const collection of library.hybridCollections?.collections ?? [])
+      for (const item of collection.items)
+        if (item.ref.provider === 'local' && !tracks.has(item.ref.trackId))
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Hybrid collection references an absent local track',
+          });
+  });
 export type BackupLibrary = z.infer<typeof backupLibrarySchema>;
 
 export const backupManifestSchema = z.object({

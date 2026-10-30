@@ -3,6 +3,7 @@ import { untrack } from 'svelte';
 import CatalogSettings from '../components/CatalogSettings.svelte';
 import DeviceSettings from '../components/DeviceSettings.svelte';
 import Icon from '../components/Icon.svelte';
+import SpotifySettings from '../components/SpotifySettings.svelte';
 import TokensSection from '../components/TokensSection.svelte';
 import { formatBytes, pluralize } from '../lib/format';
 import { pathOf } from '../lib/router.svelte';
@@ -48,6 +49,7 @@ async function logout() {
   </section>
 
   <CatalogSettings />
+  <SpotifySettings />
 
   {#if mode === 'client'}
     <DeviceSettings />

@@ -2,6 +2,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { Feature, type HealthDto, createAlbumLookup, fetchCoverImage } from '@spookyfy/shared';
+import type { SpotifyConfig } from '@spookyfy/spotify';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { registerBridgeCors } from './auth/bridge.js';
 import { registerAuth } from './auth/plugin.js';
@@ -21,6 +22,8 @@ import { type YtDlp, createYtDlp } from './ingest/ytdlp.js';
 import { AlbumService } from './library/albums.js';
 import { registerCatalogRoutes } from './library/catalog-routes.js';
 import { GenreService } from './library/genres.js';
+import { registerHybridRoutes } from './library/hybrid-routes.js';
+import { HybridPlaylistService } from './library/hybrid.js';
 import { FavoriteService, PlayService, PlaylistService } from './library/personal.js';
 import { type LibraryServices, registerLibraryRoutes } from './library/routes.js';
 import { TrackService } from './library/tracks.js';
@@ -28,9 +31,12 @@ import { CoverLookupService, SettingsService } from './lookup/service.js';
 import { registerMediaRoutes } from './media/routes.js';
 import { type SilenceAnalyzer, createSilenceAnalyzer } from './media/silence.js';
 import { TagWriter } from './media/tag-writer.js';
+import { registerSpotifyRoutes } from './spotify/routes.js';
 import { registerWeb } from './web.js';
 
 export interface BuildAppOptions {
+  spotifyConfig?: SpotifyConfig;
+  spotifyFetch?: typeof fetch;
   config: Config;
   database: DatabaseHandle;
   clock?: Clock;
@@ -74,10 +80,21 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   };
 
   const app = Fastify({
-    logger: opts.logger ?? {
-      level: config.logLevel,
-      redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
-    },
+    logger:
+      opts.logger === false
+        ? false
+        : {
+            level: config.logLevel,
+            ...(typeof opts.logger === 'object' ? opts.logger : {}),
+            redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+            serializers: {
+              req: (req) => ({
+                method: req.method,
+                url: String(req.url).split('?')[0],
+                remoteAddress: req.ip,
+              }),
+            },
+          },
     // Dietro Cloudflare Tunnel l'IP reale arriva in CF-Connecting-IP (vedi clientIp()).
     trustProxy: false,
     bodyLimit: 1024 * 1024,
@@ -97,6 +114,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   registerBridgeCors(app, config.bridgeAllowedOrigins);
   registerAuth(app, ctx, { users, sessions, tokens });
   registerTokenRoutes(app, tokens);
+  registerSpotifyRoutes(app, { config: opts.spotifyConfig, fetch: opts.spotifyFetch });
+  registerHybridRoutes(app, new HybridPlaylistService(database.sqlite, ctx.clock));
 
   const tagWriter = new TagWriter(database.sqlite, config.mediaDir, app.log);
   const albums = new AlbumService({

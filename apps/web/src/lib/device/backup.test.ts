@@ -288,3 +288,83 @@ describe('album e generi nel backup', () => {
     ]);
   });
 });
+
+test('portable hybrid ZIP contains only refs, restores into current owner and preserves local audio', async () => {
+  const { HybridRepository } = await import('../hybrid/repository');
+  const source = await makeLibrary();
+  const seeded = await seed(source.library);
+  const hybrid = new HybridRepository(
+    async () => source.db,
+    () => 'source-owner',
+  );
+  await hybrid.reconcile('synthetic-account', 1);
+  const p = await hybrid.create('Mixed');
+  await hybrid.add(p.id, { provider: 'local', trackId: seeded.a.id });
+  await hybrid.add(
+    p.id,
+    { provider: 'spotify', uri: 'spotify:track:0123456789012345678901' },
+    'synthetic-account',
+  );
+  const files = await exportBackup({ ...source.deps, hybrid }, true);
+  const zip = unzipSync(new Uint8Array(await files[0]!.arrayBuffer()));
+  const lib = JSON.parse(strFromU8(zip['library.json']!));
+  expect(lib.hybridCollections.version).toBe(1);
+  expect(JSON.stringify(lib.hybridCollections)).not.toMatch(
+    /source-owner|accessToken|refreshToken|imageUrl|audioUrl|displayName/,
+  );
+  expect(Object.keys(zip).filter((path) => path.includes('spotify'))).toEqual([]);
+  const target = await makeLibrary();
+  const restored = new HybridRepository(
+    async () => target.db,
+    () => 'target-owner',
+  );
+  await importBackup({ ...target.deps, hybrid: restored }, files);
+  await importBackup({ ...target.deps, hybrid: restored }, files);
+  const result = await restored.get(p.id);
+  expect(result.ownerId).toBe('target-owner');
+  expect(result.items).toHaveLength(2);
+  expect(result.items.find((i) => i.ref.provider === 'spotify')?.inert).toBe(true);
+  expect((await target.library.snapshot()).tracks).toHaveLength(3);
+});
+
+test('malformed hybrid extension rejects complete ZIP before local writes', async () => {
+  const { HybridRepository } = await import('../hybrid/repository');
+  const source = await makeLibrary();
+  await seed(source.library);
+  const files = await exportBackup(source.deps, false);
+  const zip = unzipSync(new Uint8Array(await files[0]!.arrayBuffer()));
+  const data = JSON.parse(strFromU8(zip['library.json']!));
+  data.hybridCollections = {
+    version: 1,
+    collections: [
+      { id: 'good', name: 'Good', createdAt: 1, updatedAt: 1, items: [] },
+      {
+        id: 'bad',
+        name: 'Bad',
+        createdAt: 1,
+        updatedAt: 1,
+        items: [
+          { itemId: 'i', ref: { provider: 'spotify', uri: 'bad' }, addedAt: 1, spotifyAccountId: 'remote' },
+        ],
+      },
+    ],
+  };
+  const libraryBytes = strToU8(JSON.stringify(data));
+  const manifest = JSON.parse(strFromU8(zip['manifest.json']!));
+  manifest.librarySha256 = [
+    ...new Uint8Array(await crypto.subtle.digest('SHA-256', libraryBytes as BufferSource)),
+  ]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  zip['library.json'] = libraryBytes;
+  zip['manifest.json'] = strToU8(JSON.stringify(manifest));
+  const corrupt = new File([zipSync(zip) as BlobPart], files[0]!.name);
+  const target = await makeLibrary();
+  const hybrid = new HybridRepository(
+    async () => target.db,
+    () => 'target',
+  );
+  await expect(importBackup({ ...target.deps, hybrid }, [corrupt])).rejects.toThrow();
+  expect((await target.library.snapshot()).tracks).toEqual([]);
+  expect(await hybrid.list()).toEqual([]);
+});

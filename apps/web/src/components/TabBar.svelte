@@ -23,6 +23,8 @@ const tabs: { label: string; path: string; icon: IconName; activeIcon: IconName;
       'favorites',
       'playlist',
       'settings',
+      'spotify',
+      'hybrid',
     ],
   },
 ];

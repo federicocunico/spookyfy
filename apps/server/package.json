@@ -20,6 +20,7 @@
     "@fastify/websocket": "^11.2.0",
     "@node-rs/argon2": "^2.0.2",
     "@spookyfy/shared": "workspace:*",
+    "@spookyfy/spotify": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "drizzle-orm": "^0.44.2",
     "fastify": "^5.4.0",

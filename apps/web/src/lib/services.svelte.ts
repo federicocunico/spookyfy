@@ -1,5 +1,5 @@
-import type { BackendMode, HealthDto, WsServerEvent } from '@spookyfy/shared';
-import { type Api, api as defaultApi, setApiHooks } from './api';
+import type { BackendMode, HealthDto, SpotifyStatusDto, WsServerEvent } from '@spookyfy/shared';
+import { type Api, api as defaultApi, request, setApiHooks } from './api';
 import { createDeviceBackend } from './device/backend';
 import { getSettings } from './device/backup';
 import { catalogSettings, scheduleCoverLookup } from './device/catalog';
@@ -7,6 +7,8 @@ import { type CoverProcessor, processCover } from './device/cover';
 import { DeviceImporter } from './device/importer';
 import { DeviceLibrary, localFallbackSrc } from './device/library';
 import { BridgeClient, GatewayClient } from './device/remote';
+import { HttpHybridRepository } from './hybrid/http';
+import { HybridRepository, type HybridRepositoryApi } from './hybrid/repository';
 import { type Db, getDb } from './offline/db';
 import { Downloads } from './offline/downloads.svelte';
 import { StorageStatus } from './offline/storage.svelte';
@@ -16,6 +18,8 @@ import { PlayReporter } from './player/play-reporter';
 import { Player } from './player/player.svelte';
 import { RealtimeClient } from './realtime/ws';
 import { Router } from './router.svelte';
+import { SpotifyModule } from './spotify/module.svelte';
+import { SpotifyTransport } from './spotify/transport';
 import { Catalog } from './stores/catalog.svelte';
 import { Connection } from './stores/connection.svelte';
 import { Jobs } from './stores/jobs.svelte';
@@ -60,6 +64,9 @@ export interface Services {
   downloads: Downloads;
   reporter: PlayReporter;
   player: Player;
+  spotify: SpotifyModule;
+  hybrid: HybridRepositoryApi;
+  deviceHybrid: HybridRepository;
   jobs: Jobs;
   realtime: Realtime;
   device: DeviceServices | null;
@@ -130,6 +137,7 @@ export function createServices(o: ServiceOverrides = {}): Services {
   const library = new Library(api, db);
   const catalog = new Catalog(api, library);
   const reporter = new PlayReporter({ api, db });
+  const mediaSession = o.mediaSession ?? new MediaSessionBridge();
   const player = new Player({
     // Modalità client: si suonano solo brani sul dispositivo, più quelli in importazione
     // (`pending:<id>`) in streaming dal gateway quando c'è rete.
@@ -140,14 +148,85 @@ export function createServices(o: ServiceOverrides = {}): Services {
     resolveSrc: dev ? localFallbackSrc : undefined,
     toasts,
     reporter,
-    mediaSession: o.mediaSession ?? new MediaSessionBridge(),
+    mediaSession,
   });
   const session = new Session({
     api,
     db,
     onAuthenticated: () => void storage.requestPersistence(),
-    beforeLogout: () => reporter.flush(),
+    beforeLogout: () => {
+      spotify.clear();
+      return reporter.flush();
+    },
   });
+  const spotify = new SpotifyModule(
+    new SpotifyTransport(o.fetch),
+    player,
+    mediaSession,
+    () => session.status === 'authenticated' && !session.offlineMode,
+    {
+      storage: win.localStorage,
+      document: win.document,
+      userId: () => session.user?.id,
+      localTrack: async (id) =>
+        connection.offline && !dev
+          ? (await library.knownTracks([id]))[0]
+          : api.tracks.get(id).catch(() => undefined),
+      localAvailable: (track) => (dev ? isLocal(track.id) : !connection.offline || isLocal(track.id)),
+    },
+  );
+  const deviceHybrid = new HybridRepository(db, () => session.user?.id);
+  const hybrid = dev
+    ? deviceHybrid
+    : new HttpHybridRepository(
+        <T>(path: string, options?: RequestInit) =>
+          request<T>(
+            (options?.method ?? 'GET') as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+            path,
+            typeof options?.body === 'string' ? (JSON.parse(options.body) as unknown) : undefined,
+          ),
+        {
+          db,
+          owner: () => session.user?.id,
+          offline: () => connection.offline,
+          status: (signal) => spotify.api.request<SpotifyStatusDto>('status', 'GET', undefined, {}, signal),
+        },
+      );
+  spotify.onStatus = async (status) => {
+    await hybrid.reconcile?.(status.linkState === 'unlinked' ? null : status.accountId, status.generation);
+  };
+  spotify.onUnlink = async (accountId) => {
+    await hybrid.purgeSpotify?.(accountId);
+  };
+  player.beforePlay = spotify.beforeLocalPlay;
+  player.onQueueReplaced = spotify.localQueueReplaced;
+  player.onQueueCommand = spotify.localQueueCommand;
+  player.onOccurrenceEnded = () => {
+    if (
+      !spotify.occurrences.length ||
+      spotify.active ||
+      spotify.occurrences[spotify.occurrenceIndex]?.ref.provider !== 'local'
+    )
+      return false;
+    spotify.advanceOccurrence(true, true);
+    return true;
+  };
+  mediaSession.localOwns = () => !spotify.active;
+  const command = (action: 'resume' | 'pause' | 'previous' | 'next') =>
+    void spotify
+      .command({ action })
+      .catch((error: unknown) =>
+        toasts.error(error instanceof Error ? error.message : 'Spotify non disponibile'),
+      );
+  mediaSession.remoteHandlers = {
+    play: () => command('resume'),
+    pause: () => command('pause'),
+    previous: () => command('previous'),
+    next: () => command('next'),
+    seekTo: (seconds) => {
+      void spotify.command({ action: 'seek', positionMs: Math.round(seconds * 1000) }).catch(() => {});
+    },
+  };
   const jobs = new Jobs({
     api,
     toasts,
@@ -204,6 +283,9 @@ export function createServices(o: ServiceOverrides = {}): Services {
     downloads,
     reporter,
     player,
+    spotify,
+    hybrid,
+    deviceHybrid,
     jobs,
     realtime,
     device,
@@ -237,6 +319,7 @@ export async function reconcileDevice(s: Services): Promise<string[]> {
 
 /** Avvio dopo l'autenticazione. */
 export async function startAuthenticated(s: Services): Promise<void> {
+  void s.spotify.refresh();
   if (s.device) {
     await s.device.library.ready().catch(() => {});
     await reconcileDevice(s);
@@ -300,6 +383,7 @@ function startCoverLookup(s: Services): void {
 }
 
 export function stopAuthenticated(s: Services): void {
+  s.spotify.clear();
   stopCoverLookup?.();
   stopCoverLookup = null;
   if (silenceBacklog) {

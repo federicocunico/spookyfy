@@ -57,6 +57,14 @@ export interface PlayerDeps {
  * automatico in background e per la lockscreen).
  */
 export class Player {
+  /** Optional cross-provider handoff. Without Spotify this remains a synchronous no-op. */
+  beforePlay?: (start: () => void) => boolean;
+  onQueueReplaced?: () => void;
+  onQueueCommand?: (command: 'next' | 'previous' | 'shuffle' | 'repeat') => boolean;
+  onOccurrenceEnded?: () => boolean;
+  isPaused(): boolean {
+    return this.audio?.paused ?? true;
+  }
   queue = $state<QueueState | null>(null);
   tracks = $state<Record<string, TrackDto>>({});
   playing = $state(false);
@@ -76,6 +84,7 @@ export class Player {
   );
 
   private audio: HTMLAudioElement | null = null;
+  private loadGeneration = 0;
   private readonly tracker: PlayTracker;
   /** Brano ripristinato all'avvio ma non ancora caricato nell'elemento audio. */
   private needsLoad = false;
@@ -135,8 +144,9 @@ export class Player {
   // ---------- comandi (dai gesti dell'utente: play() resta sincrono) ----------
 
   /** Avvia la riproduzione di una lista dal brano toccato; la coda è il resto della lista. */
-  playTracks(tracks: TrackDto[], startIndex = 0, context: string | null = null): void {
+  playTracks(tracks: TrackDto[], startIndex = 0, context: string | null = null, startAt = 0): void {
     if (tracks.length === 0) return;
+    this.onQueueReplaced?.();
     this.tracks = Object.fromEntries(tracks.map((t) => [t.id, t]));
     this.queue = createQueue(
       tracks.map((t) => t.id),
@@ -144,7 +154,7 @@ export class Player {
       { shuffle: this.queue?.shuffle ?? false, repeat: this.queue?.repeat ?? 'off', context },
     );
     // Con lo shuffle attivo si parte comunque dal brano toccato.
-    this.loadCurrent({ autoplay: true });
+    this.loadCurrent({ autoplay: true, startAt });
   }
 
   toggle(): void {
@@ -155,6 +165,7 @@ export class Player {
 
   resume(): void {
     if (!this.audio || !this.current) return;
+    if (this.beforePlay && !this.beforePlay(() => this.resume())) return;
     if (this.needsLoad) {
       this.loadCurrent({ autoplay: true, startAt: this.position });
       return;
@@ -165,10 +176,12 @@ export class Player {
   }
 
   pause(): void {
+    this.loadGeneration++;
     this.audio?.pause();
   }
 
   next(): void {
+    if (this.onQueueCommand?.('next')) return;
     if (!this.queue) return;
     const step = next(this.queue);
     if (!step.play) return;
@@ -177,6 +190,7 @@ export class Player {
   }
 
   previous(): void {
+    if (this.onQueueCommand?.('previous')) return;
     if (!this.queue || !this.audio) return;
     // «Precedente» guarda quanto si è ascoltato dall'inizio della musica, non del file.
     const start = this.current ? trimStart(this.current) : 0;
@@ -221,12 +235,14 @@ export class Player {
   }
 
   toggleShuffle(): void {
+    if (this.onQueueCommand?.('shuffle')) return;
     if (!this.queue) return;
     this.queue = setShuffle(this.queue, !this.queue.shuffle);
     this.persist(true);
   }
 
   cycleRepeat(): void {
+    if (this.onQueueCommand?.('repeat')) return;
     if (!this.queue) return;
     this.queue = { ...this.queue, repeat: cycleRepeat(this.queue.repeat) };
     this.persist(true);
@@ -266,6 +282,7 @@ export class Player {
   }
 
   stop(): void {
+    this.loadGeneration++;
     this.audio?.pause();
     if (this.audio) this.audio.removeAttribute('src');
     this.queue = null;
@@ -328,9 +345,12 @@ export class Player {
   // ---------- interni ----------
 
   private loadCurrent({ autoplay, startAt = 0 }: { autoplay: boolean; startAt?: number }): void {
+    if (autoplay && this.beforePlay && !this.beforePlay(() => this.loadCurrent({ autoplay, startAt })))
+      return;
     const track = this.current;
     const audio = this.audio;
     if (!track || !audio) return;
+    const generation = ++this.loadGeneration;
     // Offline si suonano solo i brani scaricati (verifica sincrona: play() deve restare nel gesto).
     if (this.deps.connection.offline && !this.deps.downloads.isDownloaded(track.id)) {
       this.deps.toasts.show(`«${track.title}» non è disponibile offline`);
@@ -352,7 +372,7 @@ export class Player {
       return;
     }
     void fallback.then((src) => {
-      if (this.current?.id !== track.id) return;
+      if (this.current?.id !== track.id || generation !== this.loadGeneration) return;
       if (src) this.setSrc(audio, src, autoplay);
       else {
         this.deps.toasts.show(`«${track.title}» non è più sul dispositivo`);
@@ -449,6 +469,7 @@ export class Player {
   };
 
   private onEnded = () => {
+    if (this.onOccurrenceEnded?.()) return;
     if (!this.queue || !this.audio) return;
     const step = next(this.queue, { auto: true });
     if (!step.play) {

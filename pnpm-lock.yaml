@@ -23,6 +23,9 @@ importers:
       '@spookyfy/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@spookyfy/spotify':
+        specifier: workspace:*
+        version: link:../../packages/spotify
       '@upstash/redis':
         specifier: ^1.40.0
         version: 1.40.0
@@ -69,6 +72,9 @@ importers:
       '@spookyfy/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@spookyfy/spotify':
+        specifier: workspace:*
+        version: link:../../packages/spotify
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.11.1
@@ -222,6 +228,25 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@22.20.5)(jsdom@26.1.0)(terser@5.51.2)(tsx@4.23.15)
+
+  packages/spotify:
+    dependencies:
+      '@spookyfy/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.20.5
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

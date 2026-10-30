@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "playwright test",
+    "test": "playwright test && playwright test -c spotify.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "screenshots": "playwright test -c screenshots.config.ts",
     "verify:prod": "playwright test -c remote.config.ts"

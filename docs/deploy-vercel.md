@@ -109,3 +109,13 @@ Prova del 28/10/2026 da `fra1`: la **ricerca funziona**, ma metadati e audio ven
 
 - **Libreria → Importa da file** (MP3/M4A dal telefono);
 - il **ponte verso un server on-premise** ([bridge.md](bridge.md)), che scarica con `yt-dlp` da un IP domestico.
+
+## Modulo Spotify facoltativo
+
+Il gateway usa 8 funzioni su 12: tutte le azioni Spotify condividono `api/spotify/[action].ts` (budget 20 s). Il build compila shared, poi il package backend Spotify prima della PWA. Senza variabili Spotify il deploy base continua a funzionare. `SPOTIFY_ENABLED=false` e `SPOTIFY_HYBRID_PLAYBACK_ENABLED=false` sono i valori iniziali.
+
+L'attivazione reale richiede prima la risoluzione documentata del vincolo di piattaforma. Configurare Client ID, redirect HTTPS esatto, `SPOTIFY_KEY_ID` e `SPOTIFY_ENCRYPTION_KEYS` (mappa JSON da ID a chiave base64 dedicata di 32 byte). Conservare le chiavi precedenti durante la rotazione. Non configurare client secret né riusare la chiave sessioni. Preview dinamiche non sono redirect OAuth autorizzati automaticamente. Il provider finto è consentito solo con `SPOTIFY_FAKE=true` e NODE_ENV development/test.
+
+Redis e Upstash eseguono CAS tramite EVAL atomico; link, unicità account, pending, lease e generazioni condividono un documento per evitare claim orfani. Non usare MemoryKv in produzione. Dettagli e checklist senza credenziali personali: [Spotify](spotify.md).
+
+La cancellazione account usa anche un singolo EVAL con due chiavi (record utente e indice dei nomi), dopo il tombstone utente e il blocco permanente dell'ID utente Spookyfy eliminato. Il blocco non conserva credenziali o identità Spotify. Se il cleanup fallisce, l'account resta disabilitato e lo stesso comando di cancellazione può essere ripetuto. I nomi delle chiavi legacy restano invariati. Il driver TCP configurato è Redis standalone/non-cluster: Redis Cluster con hash slot separati non è supportato da questa operazione. Upstash espone EVAL con array di chiavi. Riferimenti: [Upstash EVAL](https://upstash.com/docs/redis/sdks/ts/commands/scripts/eval), [Redis EVAL](https://redis.io/docs/latest/commands/eval/), [vincoli cluster](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/).

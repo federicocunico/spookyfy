@@ -215,6 +215,10 @@ Per ripristinare: ferma il servizio, rimetti il file del database in `DATA_DIR` 
 
 ## Aggiornare Spookyfy
 
+### Modulo Spotify
+
+Spotify si collega facoltativamente dalle impostazioni dopo aver creato l'account Spookyfy. Lo streaming richiede Premium, mentre la disponibilità delle API dipende anche da scope, allowlist, quote e dispositivi. La libreria locale e i suoi file restano separati: nessun audio Spotify viene scaricato per l'offline. Vedi [configurazione, playlist e limiti Spotify](spotify.md), inclusi i vincoli da risolvere prima dell'attivazione reale e il rollback compatibile con IndexedDB v4.
+
 ```bash
 cd /opt/spookyfy && sudo git pull && sudo pnpm install --frozen-lockfile && sudo pnpm build
 sudo systemctl restart spookyfy

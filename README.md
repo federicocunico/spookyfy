@@ -122,6 +122,8 @@ pnpm lint && pnpm typecheck
 
 ## Documentazione
 
+L'integrazione Spotify è opzionale e disattivata per impostazione predefinita: linking dopo la registrazione, libreria remota distinta e raccolte multisorgente. Configurazione, vincoli della piattaforma e prove personali ancora da eseguire sono descritti in [docs/spotify.md](docs/spotify.md). Le funzioni locali restano utilizzabili senza collegare Spotify.
+
 [Guida completa](docs/guida.md) (variabili, dimensionamento, backup, limiti di Vercel) · [Account](docs/auth.md) · [Ponte on-premise](docs/bridge.md) · [Test e verifica del deploy](docs/verifica-deploy.md) · Verifiche su [iPhone](docs/verification-ios.md) e [Android](docs/verification-android.md)
 
 > `yt-dlp` e il gateway sono pensati per uso personale: il rispetto dei termini delle piattaforme è responsabilità di chi installa Spookyfy.

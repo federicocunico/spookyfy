@@ -143,6 +143,8 @@ function go(e: MouseEvent, path: string) {
 
   {#if mode === 'client'}<DeviceNotices />{/if}
   <nav class="chips" aria-label="Filtri">
+    <a class="chip" href={pathOf.hybrid()} onclick={(e) => go(e, pathOf.hybrid())}>Raccolte Spookyfy</a>
+    <a class="chip" href={pathOf.spotify()} onclick={(e) => go(e, pathOf.spotify())}>Spotify</a>
     <a class="chip" aria-current={view === 'playlists' ? 'page' : undefined} href={pathOf.library()} onclick={(e) => go(e, pathOf.library())}>Playlist</a>
     <a class="chip" aria-current={view === 'albums' ? 'page' : undefined} href={pathOf.albums()} onclick={(e) => go(e, pathOf.albums())}>Album</a>
     <a class="chip" aria-current={view === 'genres' ? 'page' : undefined} href={pathOf.genres()} onclick={(e) => go(e, pathOf.genres())}>Generi</a>
@@ -270,10 +272,14 @@ function go(e: MouseEvent, path: string) {
   }
   .chips {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-2);
     margin: var(--space-3) 0 var(--space-4);
   }
   .chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-pill);
     background: var(--surface-3);

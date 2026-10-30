@@ -8,6 +8,7 @@ import {
   backupManifestSchema,
 } from '@spookyfy/shared';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import type { HybridRepository } from '../hybrid/repository';
 import type { Db, DeviceSettings, LocalTrackRecord } from '../offline/db';
 import {
   DEVICE_AUDIO_CACHE,
@@ -58,6 +59,7 @@ export function planBackup(
 }
 
 export interface BackupDeps {
+  hybrid?: HybridRepository;
   db: () => Promise<Db>;
   library: DeviceLibrary;
   caches?: CacheStorage;
@@ -117,6 +119,7 @@ export async function exportBackup(d: BackupDeps, includeAudio: boolean): Promis
     itemsByPlaylist.set(i.playlistId, [...(itemsByPlaylist.get(i.playlistId) ?? []), i]);
 
   const library: BackupLibrary = {
+    ...(d.hybrid ? { hybridCollections: await d.hybrid.snapshot() } : {}),
     tracks: snap.tracks.map((t) => ({
       id: t.id,
       sourceKey: t.sourceKey,
@@ -258,6 +261,9 @@ export async function importBackup(d: BackupDeps, files: File[]): Promise<Import
   }
 
   // 2. Parti audio (opzionali), indicizzate per id del brano.
+  if (library.hybridCollections && !d.hybrid)
+    throw new BackupError('Accedi per ripristinare le raccolte personali');
+  const hybridOwner = library.hybridCollections ? d.hybrid!.assertOwner() : undefined;
   const audio = new Map<string, Uint8Array>();
   for (const f of others) {
     for (const [name, bytes] of Object.entries(await unzip(f))) {
@@ -372,6 +378,10 @@ export async function importBackup(d: BackupDeps, files: File[]): Promise<Import
       return id ? [{ ...p, trackId: id }] : [];
     }),
   });
+  if (library.hybridCollections) {
+    d.hybrid!.assertOwner(hybridOwner);
+    await d.hybrid!.restore(library.hybridCollections, idMap);
+  }
   return { added, skipped, missingAudio, playlists: newPlaylists.length };
 }
 

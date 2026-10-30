@@ -4,7 +4,7 @@ import Cover from './Cover.svelte';
 import Icon from './Icon.svelte';
 import Marquee from './Marquee.svelte';
 
-const { player, router } = services();
+const { player, router, spotify } = services();
 const track = $derived(player.current);
 const progress = $derived(player.duration > 0 ? Math.min(1, player.position / player.duration) : 0);
 
@@ -42,7 +42,7 @@ function onkeydown(e: KeyboardEvent) {
 }
 </script>
 
-{#if track}
+{#if track && !spotify.active}
   <div
     class="mini"
     role="button"
@@ -60,7 +60,7 @@ function onkeydown(e: KeyboardEvent) {
     <Cover src={track.coverThumbUrl} color={track.dominantColor} size={40} />
     <div class="text">
       <Marquee text={track.title} class="title" />
-      <span class="artist ellipsis">{track.artist}</span>
+      <span class="artist ellipsis">File locale · {track.artist}</span>
     </div>
     <button
       class="icon-btn play"

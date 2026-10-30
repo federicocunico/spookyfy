@@ -61,3 +61,9 @@ La CLI legge la stessa configurazione del server (`DATA_DIR` nel file `.env`), q
 Ogni richiesta che modifica dati (POST, PUT, PATCH, DELETE) deve avere l'header `Origin` uguale a `PUBLIC_ORIGIN`. I browser lo inviano automaticamente; le richieste da altri siti vengono rifiutate con `403`.
 
 `COOKIE_SECURE=false` esiste solo per i test end-to-end su `http://localhost`: non usarlo in produzione.
+
+## Collegamento Spotify facoltativo
+
+Il login Spookyfy resta obbligatorio. Le rotte `/api/spotify/*` accettano soltanto sessioni cookie; i token del ponte non autorizzano il provider. Le mutazioni richiedono Origin esatto; la callback OAuth GET resta autenticata senza richiedere Origin. PKCE, state monouso e impronta della sessione proteggono il ritorno. Nel gateway il rinnovo JWT conserva l'identità logica della sessione; logout revoca l'intera famiglia per 30 giorni.
+
+Refresh token e verifier sono cifrati con una chiave AES dedicata; non usare SESSION_SECRET. Lo scollegamento invalida tentativi e rinnovi concorrenti. La cancellazione account da CLI elimina anche il link. Nessun errore Spotify 401 viene esposto come 401 della sessione Spookyfy. Configurazione, rotazione e vincolo di policy: [Spotify](spotify.md).

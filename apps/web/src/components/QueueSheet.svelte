@@ -3,10 +3,18 @@ import { services } from '../lib/services.svelte';
 import Cover from './Cover.svelte';
 import Sheet from './Sheet.svelte';
 
-const { ui, player } = services();
+const { ui, player, spotify } = services();
 </script>
 
-{#if ui.queueOpen && player.current}
+{#if ui.queueOpen && spotify.occurrences.length}
+  <Sheet label="Coda della raccolta Spookyfy" onclose={() => (ui.queueOpen = false)}>
+    <h2>Raccolta Spookyfy</h2>
+    <button onclick={() => spotify.resumeOccurrence()}>Riprendi raccolta</button>
+    <ol>{#each spotify.occurrences as item, i (item.occurrenceId)}<li aria-current={i === spotify.occurrenceIndex ? 'true' : undefined}>{item.ref.provider === 'local' ? `File locale · ${item.local?.title ?? 'Non disponibile'}` : `Spotify · ${item.spotify?.name ?? 'Non disponibile'}`}</li>{/each}</ol>
+    <button onclick={() => spotify.toggleOccurrenceShuffle()}>Casuale raccolta: {spotify.shuffle ? 'sì' : 'no'}</button>
+    <button onclick={() => { spotify.repeat = spotify.repeat === 'off' ? 'all' : spotify.repeat === 'all' ? 'one' : 'off'; }}>Ripeti raccolta: {spotify.repeat}</button>
+  </Sheet>
+{:else if ui.queueOpen && player.current && !spotify.active}
   <Sheet label="Coda di riproduzione" onclose={() => (ui.queueOpen = false)}>
     <h2 class="title">In riproduzione</h2>
     <div class="item current">
